@@ -1,0 +1,11 @@
+- Thomas Niemann (thomasn at epaperpress.com) for the red/black trees
+  free implementation, used to store and search ip ranges. You can 
+  find it at www.oopweb.com
+- Chris Lowth, developer of FTwall (www.lowth.com/p2pwall), i 
+  took some code and ideas from his FTwall
+- Andrew de Quincey (adq at lidskialf dot net) for regular expressions
+  and command line args patch
+- Maximilian Mehnert (clessing at freenet dot de) for logfile rotation
+  patches, pid file creation, start script, fixes/files for debian packaging
+- Akihiro Tsukada ( tsukada AT users dot sourseforge dot net) for
+  fedora packaging

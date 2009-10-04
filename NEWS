@@ -1,0 +1,15 @@
+new in 0.8-1
+- fedora packaging + minor fix
+
+Usage
+- to start blocking,  run 'sudo service moblock start'
+- to stop blocking, run 'sudo service moblock stop'
+
+NB:
+ No need to mannually update the blocklist, cron does this for you. 
+
+WARNING:
+ If moblock process aborted for some reason, EVERY connections would fail
+ until you run 'sudo service moblock stop' mannualy.
+ As moblock runs in background and thus dies silently in such cases,
+ care must be taken if you run moblock as a service (like the above commands). 

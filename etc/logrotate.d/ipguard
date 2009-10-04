@@ -1,0 +1,12 @@
+/var/log/ipguard.log {
+    missingok
+    compress
+    delaycompress
+    notifempty
+    nomail
+    size 50k
+    create 0644 root root
+    postrotate
+        /usr/bin/killall -HUP ipguard
+    endscript
+}

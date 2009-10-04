@@ -1,0 +1,76 @@
+#!/bin/bash
+
+LURLS="/etc/ipguard/blocklists"
+WLIST="/etc/ipguard/whitelist"
+LIST="/var/lib/ipguard/blocklist.p2p"
+
+CACHE="/var/cache/ipguard"
+FMD5=".md5sum"
+DLDIR="dl"
+
+RELOADCMD="/sbin/service ipguard reload"
+
+acat ()
+{
+	while read -r -d $'\0' fn; do
+		if [ "$(head -c 2 "$fn")" = $'\x1f\x8b' ]; then
+			gunzip -c "$fn"
+		elif [ "$(head -c 4 "$fn")" = $'\x50\x4b\x03\x04' ]; then
+			unzip -p "$fn"
+		else
+			cat "$fn"
+		fi
+	done
+}
+
+download ()
+{
+	MD5SUM=`grep -v -E '^#' "$LURLS" | md5sum | cut -c -32`
+	if [ -f "./$FMD5" ]; then
+		if [ `cat "$FMD5"` != $MD5SUM ]; then
+			# The list source file has changed.
+			# Clean the dl directory.
+			rm "./$DLDIR"/*
+		fi
+	elif [ `ls -A . | wc -l` -gt 0 ]; then
+		# There's no md5 file, but the directory is not empty.
+		# Something's wrong, bail out.
+		echo "$(pwd) is not empty." >/dev/stderr
+		exit 1
+	fi
+	echo $MD5SUM >"./$FMD5"
+	grep -v -E '^#' "$LURLS" | wget -nv -N -t 3 -w 1 -T 120 -P "./$DLDIR" -i -
+}
+
+reload ()
+{
+	find "./$DLDIR" -type f -print0 | acat | dos2unix | nice uniq | \
+		(nice grep -a -v -f "$WLIST" 2>/dev/null || cat) >"$LIST"
+	$RELOADCMD
+}
+
+if ! [ -f "$LURLS" ]; then
+	echo "cannot find $LURLS" >/dev/stderr
+	exit 1
+fi
+
+mkdir `dirname "$LIST"` 2>/dev/null
+mkdir -p "$CACHE" 2>/dev/null
+cd "$CACHE" || exit 1
+
+case "$1" in
+  'reload' | 'nodownload')
+	reload
+	;;
+  'download')
+	download
+	;;
+  '')
+	download
+	reload
+	;;
+  *)
+	echo $"usage: $0 [reload | download]"
+	exit 1
+esac
+

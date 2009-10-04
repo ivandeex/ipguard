@@ -1,0 +1,101 @@
+#!/bin/sh
+#
+# ipguard      This rc script takes care of starting and stopping ipguard.
+#
+# chkconfig: 345 30 70
+# description: ipguard lets you block internet traffic based on large lists
+#              of ip address ranges in order to protect your privacy.
+# processname: moblock
+#
+
+NAME="ipguard"
+PIDFILE="/var/run/${NAME}.pid"
+LOGFILE="/var/log/${NAME}.log"
+SOCKFILE="/var/run/${NAME}.sock"
+BLOCKLIST="/var/lib/${NAME}/blocklist.p2p"
+PROGRAM="/usr/sbin/ipguardd"
+OPTS=""
+CMD="$PROGRAM -p $BLOCKLIST -S $SOCKFILE -P $PIDFILE -L $LOGFILE -D $OPTS"
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+fail () {
+	failure "$2"
+	echo
+	[ -n "$1" ] && echo "$1"
+}
+
+start () {
+	echo -n $"Starting $NAME: "
+	if ! [ -x $PROGRAM  ]; then
+		fail "can't execute $PROGRAM" "$NAME startup"
+		return 1
+	fi;
+	if [ -f $PIDFILE  ]; then
+		PID=`< $PIDFILE`
+		if ps -p $PID >/dev/null; then
+			fail "$PIDFILE exists and $NAME is running." "$NAME startup"
+			return 1
+		fi;
+	fi;
+	$CMD
+	RETVAL=$?
+	echo
+	return $RETVAL
+}
+
+stop () {
+	echo -n $"Stopping $NAME: "
+	killproc -p "$PIDFILE" "$NAME"
+	RETVAL=$?
+	echo
+	return $RETVAL
+}
+
+case "$1" in
+  start)
+	start	
+	;;
+  stop)
+	stop
+	;;
+  reload)
+	if [ -f $PIDFILE ]; then
+		kill -HUP `< $PIDFILE`
+		RETVAL=$?
+	fi
+	;;
+  restart)
+	stop
+	start
+	RETVAL=$?
+	;;
+  condrestart)
+	# restart only if already running
+	if [ -f $PIDFILE ]; then
+		stop
+		start
+		RETVAL=$?
+	fi 
+	;;
+  status)
+	status $NAME
+	RETVAL=$?
+	;;
+  top)
+	if [ -f $PIDFILE ]; then
+		a=""
+		for i in `pidof $NAME`; do
+			a="$a -p $i"
+		done
+		top $a
+	fi
+	;;
+  *)
+	echo $"Usage: $0 {start|stop|reload|restart|condrestart|status|top}"
+	exit 1
+esac
+
+exit $RETVAL
+
