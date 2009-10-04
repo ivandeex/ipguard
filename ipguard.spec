@@ -13,6 +13,7 @@ Source0:        ipguard-%{version}.tar.gz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 BuildRequires:  httpd-devel
+Requires:       p7zip
 Requires:       httpd-mmn = %([ -a %{_includedir}/httpd/.mmn ] && %{__cat} %{_includedir}/httpd/.mmn || echo missing)
 
 %description
@@ -42,7 +43,7 @@ rm -rf %{buildroot}
 if [ "$1" -eq 1 ]; then
     /sbin/chkconfig --add ipguard
     /sbin/chkconfig --level 2345 ipguard off
-    #/etc/cron.daily/ipguard.cron download &> /dev/null &
+    /etc/cron.daily/ipguard.cron download &> /dev/null &
 fi
 
 %preun
@@ -71,7 +72,7 @@ fi
 %attr(0755,root,root) %{_sysconfdir}/cron.daily/%{name}.cron
 %{_sysconfdir}/logrotate.d/%{name}
 %{_localstatedir}/lib/%{name}
-%{_localstatedir}/lib/%{name}/blocklist.p2p
+%config(noreplace) %{_localstatedir}/lib/%{name}/blocklist.p2p
 %{_localstatedir}/cache/%{name}
 %{_bindir}/%{name}-test
 %{_sbindir}/%{name}d

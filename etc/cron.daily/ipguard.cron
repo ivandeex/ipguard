@@ -17,6 +17,8 @@ acat ()
 			gunzip -c "$fn"
 		elif [ "$(head -c 4 "$fn")" = $'\x50\x4b\x03\x04' ]; then
 			unzip -p "$fn"
+		elif [ "$(head -c 6 "$fn")" = $'\x37\x7a\xbc\xaf\x27\x1c' ]; then
+			7za x "$fn" -so 2>/dev/null | cat
 		else
 			cat "$fn"
 		fi
@@ -46,9 +48,9 @@ reload ()
 {
 	find "./$DLDIR" -type f -print0 | acat | dos2unix | nice uniq | \
 		(nice grep -a -v -f "$WLIST" 2>/dev/null || cat) \
-		> "$LIST.new"
+		> "$LIST.tmp"
 	# update atomically
-	mv -f "$LIST.new" "$LIST"
+	mv -f "$LIST.tmp" "$LIST"
 	# no need to send a signal - ipguard we find the change automatically
 	#$RELOADCMD
 }
