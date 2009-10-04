@@ -29,24 +29,26 @@ pthread_mutex_t fail_mutex = PTHREAD_MUTEX_INITIALIZER;
 int failed, done;
 
 
-void * one_request(void *unused)
+void * one_request(void *_cfg)
 {
+	ipguard_cfg_t *cfg = _cfg;
 	char *addr = TEST_ADDR;
 	char buf[80];
 	int ret;
 
-	ret = ipguard_check_ipaddr(addr, buf, sizeof(buf));
+	ret = ipguard_check_ipaddr(cfg, addr, buf, sizeof(buf));
 	pthread_mutex_lock(&fail_mutex);
 	if (0 == strcmp(buf, "FAIL"))
 		failed++;
 	done++;
 	pthread_mutex_unlock(&fail_mutex);
-	return unused;
+
+	return NULL;
 }
 
 
 int
-run_stress_test(void)
+run_stress_test(ipguard_cfg_t *cfg)
 {
 	int i, ret;
 	char *addr = TEST_ADDR;
@@ -59,7 +61,7 @@ run_stress_test(void)
 		failed = 0;
 		gettimeofday(&tv1, NULL);
 		for (i = 0; i < NUM_TEST; i++) {
-			ret = ipguard_check_ipaddr(addr, buf, sizeof(buf));
+			ret = ipguard_check_ipaddr(cfg, addr, buf, sizeof(buf));
 			if (0 == strcmp(buf, "FAIL"))
 				failed++;
 		}
@@ -81,7 +83,7 @@ run_stress_test(void)
 		failed = num = done = 0;
 		printf("creating %d threads...\n", NUM_THREAD);
 		for (i = 0; i < NUM_THREAD; i++) {
-			ret = pthread_create(&threads[num], NULL, one_request, NULL);
+			ret = pthread_create(&threads[num], NULL, one_request, cfg);
 			if (ret == 0)
 				num++;
 		}
@@ -96,6 +98,7 @@ run_stress_test(void)
 	}
 #endif /* IPGUARD_THREADS */
 
+	ipguard_shutdown(cfg);
 	return 0;
 }
 
@@ -106,6 +109,10 @@ main(int argc, char **argv)
 	int ret;
 	char buf[80], addr[80];
 	int stress_test = 0;
+	ipguard_cfg_t cfg_buf;
+	ipguard_cfg_t *cfg = &cfg_buf;
+
+	ipguard_init(cfg);
 
 	while (1) {
 		ret = getopt(argc, argv, "vprs:S");
@@ -113,16 +120,16 @@ main(int argc, char **argv)
 			break;
 		switch (ret) {
 			case 'v':
-				ipguard_set_debug(1);
+				ipguard_set_debug(cfg, 1);
 				break;
 			case 'p':
-				ipguard_set_restrictive(0);
+				ipguard_set_restrictive(cfg, 0);
 				break;
 			case 'r':
-				ipguard_set_restrictive(1);
+				ipguard_set_restrictive(cfg, 1);
 				break;
 			case 's':
-				ipguard_set_socket_path(optarg);
+				ipguard_set_socket_path(cfg, optarg);
 				break;
 			case 'S':
 				stress_test = 1;
@@ -139,10 +146,10 @@ main(int argc, char **argv)
 		}
 	}
 
-	ipguard_set_enable(1);
+	ipguard_set_enable(cfg, 1);
 
 	if (stress_test) {
-		return run_stress_test();
+		return run_stress_test(cfg);
 	}
 
 	while (1) {
@@ -153,10 +160,11 @@ main(int argc, char **argv)
 		sscanf(buf, " %s", addr);
 		if (*addr == 'q' || *addr == 'e')
 			break;
-		ret = ipguard_check_ipaddr(addr, buf, sizeof(buf));
+		ret = ipguard_check_ipaddr(cfg, addr, buf, sizeof(buf));
 		printf("%s (%s)\n", ret == 0 ? "OK" : "BAN", buf);
 	}
 
+	ipguard_shutdown(cfg);
 	return 0;
 }
 

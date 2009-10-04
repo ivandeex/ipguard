@@ -24,12 +24,13 @@
 #include "httpd.h"
 #include "http_config.h"
 #include "http_core.h"
-#if 1
-#include "http_protocol.h"
-#include "http_request.h"
 #include "http_log.h"
-#include "util_md5.h"
 #include "ap_config.h"
+
+#include "http_request.h"
+#if 0
+#include "http_protocol.h"
+#include "util_md5.h"
 #include "ap_release.h"
 #include "apr_buckets.h"
 #include "apr_file_info.h"
@@ -38,9 +39,10 @@
 #include "apr_xml.h"
 #endif
 
-#include "ipguard.h"
-
-/* dirty! dirty! do not play with libraries, just include */
+/* dirty! dirty! do not link, just include */
+#define IPGUARD_APACHE_MODULE 1
+#define IPGUARD_PTHREADS 1
+#define MODULE_INTERNAL static
 #include "ipguard-client.c"
 
 module AP_MODULE_DECLARE_DATA ipguard_module;
@@ -50,6 +52,7 @@ typedef struct ipguard_srv_cfg {
 	int debug;
 	int restrictive;
 	char *socket_path;
+	ipguard_cfg_t cfg;
 } ipguard_srv_cfg;
 
 #define IPGUARD_UNSET	-1
@@ -90,13 +93,17 @@ static int
 ipguard_post_config(apr_pool_t *p, apr_pool_t *plog, apr_pool_t *ptemp, server_rec *srv)
 {
 	ipguard_srv_cfg *c = (ipguard_srv_cfg *) ap_get_module_config(&srv->module_config, &ipguard_module);
+	ipguard_cfg_t *cfg = &(c->cfg);
 
-	if (c->enable != IPGUARD_UNSET)
-		ipguard_set_enable(c->enable);
+	ipguard_init(cfg);
+	if (c->debug != IPGUARD_UNSET)
+		ipguard_set_debug(cfg, c->debug);
 	if (c->restrictive != IPGUARD_UNSET)
-		ipguard_set_restrictive(c->restrictive);
+		ipguard_set_restrictive(cfg, c->restrictive);
 	if (c->socket_path != NULL)
-		ipguard_set_socket_path(c->socket_path);
+		ipguard_set_socket_path(cfg, c->socket_path);
+	if (c->enable != IPGUARD_UNSET)
+		ipguard_set_enable(cfg, c->enable);
 
     return OK;
 }
@@ -107,14 +114,19 @@ ipguard_check_access(request_rec *r)
 {
 	int ret;
 	ipguard_srv_cfg *c;
+	ipguard_cfg_t *cfg;
 	char reply[80];
 
 	c = (ipguard_srv_cfg *) ap_get_module_config(r->server->module_config,
-											&ipguard_module);
+												&ipguard_module);
+	cfg = &(c->cfg);
 	if (c->enable != IPGUARD_ON)
 		return OK;
 
-	ret = ipguard_check_ipaddr(r->connection->remote_ip, reply, sizeof(reply));
+	cfg->apache_req = r;
+	ret = ipguard_check_ipaddr(cfg, r->connection->remote_ip,
+								reply, sizeof(reply));
+	cfg->apache_req = NULL;
 	ret = (ret == IPGUARD_OK) ? OK : HTTP_FORBIDDEN;
 
 	if (c->debug == IPGUARD_ON) {

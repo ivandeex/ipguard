@@ -29,12 +29,47 @@ extern "C" {
 #define IPGUARD_OK			0
 #define IPGUARD_FORBIDDEN	1
 
-int ipguard_check_ipaddr (const char *ipaddr, char *answer, int answer_len);
-int ipguard_check_ip (unsigned long ip, char *answer, int answer_len);
-int ipguard_set_debug (int debug);
-int ipguard_set_restrictive (int restrictive);
-int ipguard_set_enable (int enable);
-int ipguard_set_socket_path (const char *socket_path);
+#ifndef MODULE_INTERNAL
+#define MODULE_INTERNAL
+#endif
+
+#if IPGUARD_PTHREADS
+#include <pthread.h>
+#define ipguard_mutex_lock(cfg)		pthread_mutex_lock((&(cfg)->mutex))
+#define ipguard_mutex_unlock(cfg)	pthread_mutex_unlock((&(cfg)->mutex))
+#else /* IPGUARD_PTHREADS */
+#define ipguard_mutex_lock(cfg)		do{}while(0)
+#define ipguard_mutex_unlock(cfg)	do{}while(0)
+#endif /* IPGUARD_PTHREADS */
+
+#define IPGUARD_LOG_PREFIX "ipguard: "
+
+typedef struct ipguard_cfg {
+	int  enable;
+	int  debug;
+	int  restrictive;
+	char socket_path[256];
+	int  socket;
+#if IPGUARD_PTHREADS
+	pthread_mutex_t mutex;
+#endif /* IPGUARD_PTHREADS */
+#ifdef IPGUARD_APACHE_MODULE
+	request_rec *apache_req;
+#endif /* IPGUARD_APACHE_MODULE */
+} ipguard_cfg_t;
+
+MODULE_INTERNAL int ipguard_init (ipguard_cfg_t *cfg);
+#ifndef IPGUARD_APACHE_MODULE
+MODULE_INTERNAL int ipguard_shutdown (ipguard_cfg_t *cfg);
+#endif
+MODULE_INTERNAL int ipguard_check_ipaddr (ipguard_cfg_t *cfg, const char *ipaddr, char *answer, int answer_len);
+#ifndef IPGUARD_APACHE_MODULE
+MODULE_INTERNAL int ipguard_check_ip (ipguard_cfg_t *cfg, unsigned long ip, char *answer, int answer_len);
+#endif
+MODULE_INTERNAL int ipguard_set_debug (ipguard_cfg_t *cfg, int debug);
+MODULE_INTERNAL int ipguard_set_restrictive (ipguard_cfg_t *cfg, int restrictive);
+MODULE_INTERNAL int ipguard_set_enable (ipguard_cfg_t *cfg, int enable);
+MODULE_INTERNAL int ipguard_set_socket_path (ipguard_cfg_t *cfg, const char *socket_path);
 
 #ifdef __cplusplus
 }

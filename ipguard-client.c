@@ -25,106 +25,101 @@
 
 #include "ipguard.h"
 
-static char  ipguard_socket_path[256] = IPGUARD_DEF_SOCKET_PATH;
-static int   ipguard_enable = IPGUARD_DEF_ENABLE;
-static int   ipguard_debug = IPGUARD_DEF_DEBUG;
-static int   ipguard_restrictive = IPGUARD_DEF_RESTRICTIVE;
-static int   ipguard_socket = -1;
-
-#if IPGUARD_PTHREADS
-
-#include <pthread.h>
-
-static pthread_mutex_t ipguard_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-#define IPGUARD_MUTEX_LOCK()	pthread_mutex_lock(&ipguard_mutex)
-#define IPGUARD_MUTEX_UNLOCK()	pthread_mutex_unlock(&ipguard_mutex)
-
-#else /* IPGUARD_PTHREADS */
-
-#define IPGUARD_MUTEX_LOCK()	do{}while(0)
-#define IPGUARD_MUTEX_UNLOCK()	do{}while(0)
-
-#endif /* IPGUARD_PTHREADS */
-
-#define IPGUARD_LOG_PREFIX "ipguard: "
-
 static int
-ipguard_log(const char *fmt, ...)
+ipguard_log(ipguard_cfg_t *cfg, const char *fmt, ...)
 {
 	char buf[256] = IPGUARD_LOG_PREFIX;
 	int len;
 	va_list ap;
 
+	if (NULL == cfg)
+		return -1;
+
 	len = sizeof(IPGUARD_LOG_PREFIX) - 1;
 	va_start(ap, fmt);
 	vsnprintf(buf + len, sizeof(buf) - len - 2, fmt, ap);
 	va_end(ap);
+
+#ifdef IPGUARD_APACHE_MODULE
+	if (cfg->apache_req)
+		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, cfg->apache_req, "%s", buf);
+#else  /* !IPGUARD_APACHE_MODULE */
 	strcat(buf, "\n");
 	fputs(buf, stdout);
 	fflush(stdout);
+#endif /* IPGUARD_APACHE_MODULE */
+
 	return 0;
 }
 
 
 static int
-ipguard_disconnect(void)
+ipguard_disconnect(ipguard_cfg_t *cfg)
 {
-	if (ipguard_socket >= 0) {
-		close(ipguard_socket);
-		ipguard_socket = -1;
-		if (ipguard_debug)
-			ipguard_log("disconnected");
+	if (NULL == cfg)
+		return -1;
+	if (cfg->socket >= 0) {
+		close(cfg->socket);
+		cfg->socket = -1;
+		if (cfg->debug)
+			ipguard_log(cfg, "disconnected");
 	}
 	return 0;
 }
 
 
 static int
-ipguard_connect(void)
+ipguard_connect(ipguard_cfg_t *cfg)
 {
 	struct sockaddr_un sa;
+	char erbuf[80];
 
-	if (ipguard_socket >= 0)
-		ipguard_disconnect();
+	if (NULL == cfg)
+		return -1;
+
+	if (cfg->socket >= 0)
+		ipguard_disconnect(cfg);
 
 	sa.sun_family = AF_UNIX;
-	strncpy(sa.sun_path, ipguard_socket_path,
-			(sizeof(struct sockaddr_un) - sizeof(short)));
+	strncpy(sa.sun_path, cfg->socket_path, sizeof(sa) - sizeof(sa.sun_family));
 
-	ipguard_socket = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (ipguard_socket < 0) {
-		ipguard_log("socket() failed for %s (%s)",
-					ipguard_socket_path, strerror(errno));
+	cfg->socket = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (cfg->socket < 0) {
+		ipguard_log(cfg, "socket() failed for %s (%s)",
+					cfg->socket_path, strerror_r(errno, erbuf, sizeof(erbuf)));
 		return -1;
 	}
 
-	if (connect(ipguard_socket, (struct sockaddr *) &sa, sizeof(sa)) < 0) {
-		ipguard_log("connect() failed for %s (%s)",
-					ipguard_socket_path, strerror(errno));
-		close(ipguard_socket);
-		ipguard_socket = -1;
+	if (connect(cfg->socket, (struct sockaddr *) &sa, sizeof(sa)) < 0) {
+		ipguard_log(cfg, "connect() failed for %s (%s)",
+					cfg->socket_path, strerror_r(errno, erbuf, sizeof(erbuf)));
+		close(cfg->socket);
+		cfg->socket = -1;
 		return -1;
 	}
 
-	if (ipguard_debug)
-		ipguard_log("connected to %s", ipguard_socket_path);
+	if (cfg->debug)
+		ipguard_log(cfg, "connected to %s", cfg->socket_path);
 	return 0;
 }
 
 
 static int
-ipguard_send_query(const char *req, char *reply, int reply_len)
+ipguard_send_query(ipguard_cfg_t *cfg, const char *req, char *reply, int reply_len)
 {
 	int i, n, k, attempt;
+	char erbuf[80];
 	int len = strlen(req);
+
+	if (NULL == cfg)
+		return -1;
 
 	for (attempt = 0; attempt < 1; attempt++) {
 
-		if (ipguard_socket < 0) {
-			if (ipguard_connect() < 0) {
-				if (ipguard_debug)
-					ipguard_log("connection failed");
+		if (cfg->socket < 0) {
+			if (ipguard_connect(cfg) < 0) {
+				if (cfg->debug)
+					ipguard_log(cfg, "connection failed");
 				return -1;
 			}
 			attempt++;
@@ -133,33 +128,35 @@ ipguard_send_query(const char *req, char *reply, int reply_len)
 		i = 0;
 		n = 1;
 		while (i < len && n > 0) {
-			n = send(ipguard_socket, req + i, len - i, MSG_NOSIGNAL);
+			n = send(cfg->socket, req + i, len - i, MSG_NOSIGNAL);
 			if (n > 0)
 				i += n;
-			if (ipguard_debug)
-				ipguard_log("sent %d bytes out of %d", n, len);
+			if (cfg->debug)
+				ipguard_log(cfg, "sent %d bytes out of %d", n, len);
 		}
 
 		if (i == len)
 			break;
 
 		if (attempt > 0) {
-			if (ipguard_debug)
-				ipguard_log("cannot send query (%s)", strerror(errno));
-			ipguard_disconnect();
+			if (cfg->debug) {
+				ipguard_log(cfg, "cannot send query (%s)",
+						strerror_r(errno, erbuf, sizeof(erbuf)));
+			}
+			ipguard_disconnect(cfg);
 			return -1;
 		}
 
-		ipguard_disconnect();
+		ipguard_disconnect(cfg);
 	}
 
-	if (ipguard_debug)
-		ipguard_log("request sent");
+	if (cfg->debug)
+		ipguard_log(cfg, "request sent");
 
 	i = 0;
 	n = 1;
 	while (i < reply_len - 1 && n > 0) {
-		n = recv(ipguard_socket, reply + i, reply_len - i - 1, MSG_NOSIGNAL);
+		n = recv(cfg->socket, reply + i, reply_len - i - 1, MSG_NOSIGNAL);
 		if (n > 0) {
 			for (k = i; k < i + n; k++) {
 				if (reply[k] == '\n')
@@ -171,32 +168,35 @@ ipguard_send_query(const char *req, char *reply, int reply_len)
 				break;
 			}
 		}
-		if (ipguard_debug)
-			ipguard_log("received %d bytes of response", n);
+		if (cfg->debug)
+			ipguard_log(cfg, "received %d bytes of response", n);
 	}
 
 	reply[i] = '\0';
-	if (ipguard_debug)
-		ipguard_log("validation response: \"%s\"", reply);
+	if (cfg->debug)
+		ipguard_log(cfg, "validation response: \"%s\"", reply);
 
 	return 0;
 }
 
 
-int
-ipguard_check_ipaddr(const char *ipaddr, char *answer, int answer_len)
+MODULE_INTERNAL int
+ipguard_check_ipaddr(ipguard_cfg_t *cfg, const char *ipaddr, char *answer, int answer_len)
 {
 	int ret, i;
 	char req[80], reply[80];
 
-	if (!ipguard_enable) {
+	if (NULL == cfg)
+		return -1;
+
+	if (!cfg->enable) {
 		if (answer && answer_len > 0)
 			*answer = 0;
 		return 0;
 	}
 
-	if (ipguard_debug)
-		ipguard_log("validate \"%s\"", ipaddr);
+	if (cfg->debug)
+		ipguard_log(cfg, "validate \"%s\"", ipaddr);
 
 	/* leave only one request delimiter, at the end */
 	strncpy(req, ipaddr, sizeof(req) - 2);
@@ -207,12 +207,12 @@ ipguard_check_ipaddr(const char *ipaddr, char *answer, int answer_len)
 	req[i++] = '\n';
 	req[i] = '\0';
 
-	IPGUARD_MUTEX_LOCK();
-	ret = ipguard_send_query(req, reply, sizeof(reply) - 1);
-	IPGUARD_MUTEX_UNLOCK();
+	ipguard_mutex_lock(cfg);
+	ret = ipguard_send_query(cfg, req, reply, sizeof(reply) - 1);
+	ipguard_mutex_unlock(cfg);
 
 	if (ret < 0) {
-		ret = ipguard_restrictive ? 1 : 0;
+		ret = cfg->restrictive ? 1 : 0;
 		strcpy(reply, "FAIL");
 	} else if (0 == strcmp(reply, "OK")) {
 		ret = 0;
@@ -220,8 +220,8 @@ ipguard_check_ipaddr(const char *ipaddr, char *answer, int answer_len)
 		ret = 1;
 	}
 
-	if (ipguard_debug) {
-		ipguard_log("%s access for \"%s\" (%s)",
+	if (cfg->debug) {
+		ipguard_log(cfg, "%s access for \"%s\" (%s)",
 					ret == 0? "granted" : "denied", ipaddr, reply);
 	}
 
@@ -232,64 +232,119 @@ ipguard_check_ipaddr(const char *ipaddr, char *answer, int answer_len)
 }
 
 
-int
-ipguard_check_ip(unsigned long ip, char *answer, int answer_len)
+#ifndef IPGUARD_APACHE_MODULE
+MODULE_INTERNAL int
+ipguard_check_ip(ipguard_cfg_t *cfg, unsigned long ip, char *answer, int answer_len)
 {
 	char ipaddr[20];
+
+	if (NULL == cfg)
+		return -1;
 
 	ip = ntohl(ip);
 	sprintf(ipaddr, "%lu.%lu.%lu.%lu",
 			(ip >> 24) & 255, (ip >> 16) & 255, (ip >> 8) & 255, (ip) & 255);
 
-	return ipguard_check_ipaddr(ipaddr, answer, answer_len);
+	return ipguard_check_ipaddr(cfg, ipaddr, answer, answer_len);
 }
+#endif /* !IPGUARD_APACHE_MODULE */
 
 
-int
-ipguard_set_debug(int new_debug)
+MODULE_INTERNAL int
+ipguard_set_debug(ipguard_cfg_t *cfg, int new_debug)
 {
-	int old_debug = ipguard_debug;
-	ipguard_debug = new_debug;
+	int old_debug;
+	if (NULL == cfg)
+		return -1;
+	old_debug = cfg->debug;
+	if (new_debug != -1)
+		cfg->debug = !!new_debug;
 	return old_debug;
 }
 
 
-int
-ipguard_set_restrictive(int new_restrictive)
+MODULE_INTERNAL int
+ipguard_set_restrictive(ipguard_cfg_t *cfg, int new_restrictive)
 {
-	int old_restrictive = ipguard_restrictive;
-	ipguard_restrictive = new_restrictive;
+	int old_restrictive;
+	if (NULL == cfg)
+		return -1;
+	old_restrictive = cfg->restrictive;
+	if (new_restrictive != -1)
+		cfg->restrictive = new_restrictive;
 	return old_restrictive;
 }
 
 
-int
-ipguard_set_enable(int new_enable)
+MODULE_INTERNAL int
+ipguard_set_enable(ipguard_cfg_t *cfg, int new_enable)
 {
-	int old_enable = ipguard_enable;
-	ipguard_enable = new_enable;
-	if (new_enable && ipguard_socket < 0)
-		ipguard_connect();
-	if (!new_enable && ipguard_socket >= 0)
-		ipguard_disconnect();
+	int old_enable;
+	if (NULL == cfg)
+		return -1;
+	old_enable = cfg->enable;
+	if (new_enable != -1) {
+		cfg->enable = !!new_enable;
+		if (new_enable && cfg->socket < 0)
+			ipguard_connect(cfg);
+		if (!new_enable && cfg->socket >= 0)
+			ipguard_disconnect(cfg);
+	}
 	return old_enable;
 }
 
 
-int
-ipguard_set_socket_path(const char *new_socket_path)
+MODULE_INTERNAL int
+ipguard_set_socket_path(ipguard_cfg_t *cfg, const char *new_socket_path)
 {
-	if (NULL == new_socket_path || 0 == *new_socket_path
-			|| strlen(new_socket_path) >= sizeof(ipguard_socket_path))
+	if (NULL == cfg
+			|| NULL == new_socket_path || 0 == *new_socket_path
+			|| strlen(new_socket_path) >= sizeof(cfg->socket_path))
 		return -1;
-	if (0 == strcmp(ipguard_socket_path, new_socket_path))
+	if (0 == strcmp(cfg->socket_path, new_socket_path))
 		return 0;
-	strcpy(ipguard_socket_path, new_socket_path);
-	if (ipguard_socket >= 0) {
-		ipguard_disconnect();
-		ipguard_connect();
+	strcpy(cfg->socket_path, new_socket_path);
+	if (cfg->enable && cfg->socket >= 0) {
+		ipguard_disconnect(cfg);
+		ipguard_connect(cfg);
 	}
 	return 0;
 }
+
+
+MODULE_INTERNAL int
+ipguard_init(ipguard_cfg_t *cfg)
+{
+	if (NULL == cfg)
+		return -1;
+	strcpy(cfg->socket_path, IPGUARD_DEF_SOCKET_PATH);
+	cfg->enable = IPGUARD_DEF_ENABLE;
+	cfg->debug = IPGUARD_DEF_DEBUG;
+	cfg->restrictive = IPGUARD_DEF_RESTRICTIVE;
+	cfg->socket = -1;
+#if IPGUARD_PTHREADS
+	pthread_mutex_init(&(cfg->mutex), NULL);
+#endif /* IPGUARD_PTHREADS */
+	return 0;
+}
+
+
+#ifndef IPGUARD_APACHE_MODULE
+MODULE_INTERNAL int
+ipguard_shutdown(ipguard_cfg_t *cfg)
+{
+	if (NULL == cfg)
+		return -1;
+	ipguard_disconnect(cfg);
+	cfg->enable = 0;
+#if IPGUARD_PTHREADS
+	pthread_mutex_destroy(&(cfg->mutex));
+#endif /* IPGUARD_PTHREADS */
+#ifdef IPGUARD_APACHE_MODULE
+	cfg->apache_req = NULL;
+#endif /* IPGUARD_APACHE_MODULE */
+	return 0;
+}
+#endif /* !IPGUARD_APACHE_MODULE */
 
 
