@@ -1,5 +1,6 @@
 #!/bin/bash
 
+LOG="/var/log/ipguard.log"
 LURLS="/etc/ipguard/blocklists"
 WLIST="/etc/ipguard/whitelist"
 LIST="/var/lib/ipguard/blocklist.p2p"
@@ -9,6 +10,8 @@ FMD5=".md5sum"
 DLDIR="dl"
 
 RELOADCMD="/sbin/service ipguard reload"
+
+[ x"$1" = x"-v" ] && shift || exec $0 -v "$*" >> $LOG 2>&1
 
 acat ()
 {
