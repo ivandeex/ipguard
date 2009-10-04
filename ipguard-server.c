@@ -27,7 +27,6 @@
 #include <string.h>
 #include <errno.h>
 #include <time.h>
-#include <regex.h>
 #include <signal.h>
 #include <syslog.h>
 #include <sys/stat.h>
@@ -308,46 +307,69 @@ loadlist_pg1(const char* filename)
 	ssize_t count;
 	char *line = NULL;
 	size_t len = 0;
-	int ntot=0;
-	regex_t regmain;
-	regmatch_t matches[4];
+	int ntot = 0;
+	char c, *p;
 	int i;
+	char *start, *end;
 
-	regcomp(&regmain, "^(.*)[:]([0-9.]*)[-]([0-9.]*)$", REG_EXTENDED);
-
-	fp = fopen(filename,"r");
+	fp = fopen(filename, "r");
 	if (fp == NULL) {
 		log_action("error opening %s, aborting", filename);
 		return -1;
 	}
 
 	while ((count = getline(&line, &len, fp)) != -1) {
-		if (line[0] == '#')		/* comment line, skip */
+
+		if (*line == '#')	/* comment line, skip */
 			continue;
-		for (i = count-1; i >= 0; i--) {
-			if ((line[i] == '\r') || (line[i] == '\n') || (line[i] == ' ')) {
-				line[i] = 0;
-			} else {
+
+		for (p = line + count - 1; p != line; p--) {
+			c = *p;
+			if (c == '\r' || c == '\n' || c == ' ')
+				*p = '\0';
+			else
 				break;
-			}
 		}
 
-		if (*line == '\0')
+		if (*line == '\0')	/* empty line, skip */
 			continue;
 
-		if (0 == regexec(&regmain, line, 4, matches, 0)) {
-			line[matches[1].rm_eo] = 0;
-			line[matches[2].rm_eo] = 0;
-			line[matches[3].rm_eo] = 0;
-
-			ranged_insert(line+matches[1].rm_so, 
-						line+matches[2].rm_so, 
-						line+matches[3].rm_so);
-			ntot++;
-		} else {
-			log_action("short .p2p line \"%s\", skipping", line);
+		while (p != line) {
+			c = *p;
+			if (c != '.' && (c < '0' || c > '9'))
+				break;
+			p--;
 		}
+		if ((c != '-' && c != ':') || p == line) {
+			log_action(".p2p line \"%s\" misses '-', skip", line);
+			continue;
+		}
+
+		if (c == ':') {
+			*p = '\0';
+			start = end = p + 1;
+		}
+		else {
+			end = p + 1;
+			*p-- = '\0';
+			while (p != line) {
+				c = *p;
+				if (c != '.' && (c < '0' || c > '9'))
+					break;
+				p--;
+			}
+			if (c != ':' || p == line) {
+				log_action(".p2p line \"%s\" misses '-', skip", line);
+				continue;
+			}
+			*p = '\0';
+			start = p + 1;
+		}
+
+		ranged_insert(line, start, end);
+		ntot++;
 	}
+
 	if (line)
 		free(line);
 	fclose(fp);
