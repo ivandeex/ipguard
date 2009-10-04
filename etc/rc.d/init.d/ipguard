@@ -11,16 +11,17 @@
 NAME="ipguard"
 PIDFILE="/var/run/${NAME}.pid"
 LOGFILE="/var/log/${NAME}.log"
+LOCKFILE="/var/lock/subsys/${NAME}"
 SOCKFILE="/var/run/${NAME}.sock"
 BLOCKLIST="/var/lib/${NAME}/blocklist.p2p"
 PROGRAM="/usr/sbin/ipguardd"
-OPTS=""
-CMD="$PROGRAM -p $BLOCKLIST -S $SOCKFILE -P $PIDFILE -L $LOGFILE -D $OPTS"
+OPTS="-p $BLOCKLIST -S $SOCKFILE -P $PIDFILE -L $LOGFILE -D"
 
 # Source function library.
 . /etc/rc.d/init.d/functions
 
-fail () {
+fail ()
+{
 	failure "$2"
 	echo
 	[ -n "$1" ] && echo "$1"
@@ -31,17 +32,18 @@ start () {
 	if ! [ -x $PROGRAM  ]; then
 		fail "can't execute $PROGRAM" "$NAME startup"
 		return 1
-	fi;
+	fi
 	if [ -f $PIDFILE  ]; then
 		PID=`< $PIDFILE`
 		if ps -p $PID >/dev/null; then
 			fail "$PIDFILE exists and $NAME is running." "$NAME startup"
 			return 1
-		fi;
-	fi;
-	$CMD
+		fi
+	fi
+	daemon $PROGRAM $OPTS
 	RETVAL=$?
 	echo
+	[ $RETVAL -eq 0 ] && touch $LOCKFILE
 	return $RETVAL
 }
 
@@ -50,6 +52,7 @@ stop () {
 	killproc -p "$PIDFILE" "$NAME"
 	RETVAL=$?
 	echo
+	[ $RETVAL -eq 0 ] && rm -f $LOCKFILE
 	return $RETVAL
 }
 
@@ -85,11 +88,11 @@ case "$1" in
 	;;
   top)
 	if [ -f $PIDFILE ]; then
-		a=""
+		pids=""
 		for i in `pidof $NAME`; do
-			a="$a -p $i"
+			pids="$pids -p $i"
 		done
-		top $a
+		top $pids
 	fi
 	;;
   *)

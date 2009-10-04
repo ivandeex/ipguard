@@ -45,8 +45,12 @@ download ()
 reload ()
 {
 	find "./$DLDIR" -type f -print0 | acat | dos2unix | nice uniq | \
-		(nice grep -a -v -f "$WLIST" 2>/dev/null || cat) >"$LIST"
-	$RELOADCMD
+		(nice grep -a -v -f "$WLIST" 2>/dev/null || cat) \
+		> "$LIST.new"
+	# update atomically
+	mv -f "$LIST.new" "$LIST"
+	# no need to send a signal - ipguard we find the change automatically
+	#$RELOADCMD
 }
 
 if ! [ -f "$LURLS" ]; then

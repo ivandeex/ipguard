@@ -40,24 +40,24 @@ rm -rf %{buildroot}
 
 %post
 if [ "$1" -eq 1 ]; then
-	/sbin/chkconfig --add moblock
-        /sbin/chkconfig --level 2345 moblock off
-	/etc/cron.daily/moblock.cron download &> /dev/null &
+    /sbin/chkconfig --add ipguard
+    /sbin/chkconfig --level 2345 ipguard off
+    #/etc/cron.daily/ipguard.cron download &> /dev/null &
 fi
 
 %preun
 if [ "$1" -eq 0 ]; then
-	/sbin/service moblock stop &> /dev/null
-	/sbin/chkconfig --del moblock
-        rm -rf %{_localstatedir}/lib/%{name}/*
-        rm -rf %{_localstatedir}/cache/%{name}/*
-        rm -rf %{_localstatedir}/log/%{name}*
-        rm -f  %{_localstatedir}/log/MoBlock.stats
+    /sbin/service ipguard stop &> /dev/null
+    /sbin/chkconfig --del ipguard
+    rm -rf %{_localstatedir}/lib/%{name}/*
+    rm -rf %{_localstatedir}/cache/%{name}/*
+    rm -rf %{_localstatedir}/log/%{name}*
+    rm -f  %{_localstatedir}/log/%{name}.stats
 fi
 
 %postun
 if [ "$1" -ge 1 ]; then
-	/sbin/service moblock condrestart &> /dev/null
+    /sbin/service ipguard condrestart &> /dev/null
 fi
 
 %files
@@ -73,21 +73,16 @@ fi
 %{_localstatedir}/lib/%{name}
 %{_localstatedir}/lib/%{name}/blocklist.p2p
 %{_localstatedir}/cache/%{name}
-%{_libexecdir}/%{name}
+%{_bindir}/%{name}-test
+%{_sbindir}/%{name}d
 
 %{_libdir}/httpd/modules/mod_ipguard.so
 %config(noreplace) %{_sysconfdir}/httpd/conf.d/ipguard.conf
 
 %changelog
-* Sun Sep 27 2009  RPM Admin <rpmadmin@vitki.net> 0.9rc2-1.vitki01
-- Port 0.9rc2 to CentOS
-
-* Thu Aug 23 2007  Akihiro TSUKADA <atsukada AT users.sourceforge.net> 0.8-2
-- fiexed error in cron.daily/moblock.cron script, loglotate.d/moblock
+* Sun Oct  4 2009  RPM Admin <rpmadmin@vitki.net> 0.9rc2-1.vitki01
+- port to centos
 
 * Mon Aug 20 2007  Akihiro TSUKADA <atsukada AT users.sourceforge.net> 0.8-1
 - initial release
-- changed the locations of supporting files (cache etc.)
-- moved the rules for allowing lo <-> lo communications to MOBLOCK chain
-- surpressed errors for missing blocklist, allowing it to be created afterward
-- removed some log outputs from blocklist merging
+
