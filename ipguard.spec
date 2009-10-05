@@ -68,6 +68,7 @@ fi
 %dir %{_sysconfdir}/%{name}
 %config(noreplace) %{_sysconfdir}/%{name}/blocklists
 %config(noreplace) %{_sysconfdir}/%{name}/whitelist
+%config(noreplace) %{_sysconfdir}/%{name}/localblocklist
 %attr(0755,root,root) %{_sysconfdir}/rc.d/init.d/%{name}
 %attr(0755,root,root) %{_sysconfdir}/cron.daily/%{name}.cron
 %{_sysconfdir}/logrotate.d/%{name}

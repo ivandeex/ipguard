@@ -3,6 +3,7 @@ nobase_dist_sysconf_DATA = \
 	logrotate.d/ipguard \
 	ipguard/blocklists \
 	ipguard/whitelist \
+	ipguard/localblocklist \
 	rc.d/init.d/ipguard
 
 install-data-hook:
