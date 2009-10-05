@@ -5,6 +5,7 @@ LURLS="/etc/ipguard/blocklists"
 BLIST="/etc/ipguard/localblocklist"
 WLIST="/etc/ipguard/whitelist"
 LIST="/var/lib/ipguard/blocklist.p2p"
+#export http_proxy="http://youproxy:8080"
 
 CACHE="/var/cache/ipguard"
 FMD5=".md5sum"
