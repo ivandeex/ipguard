@@ -111,8 +111,6 @@ main(int argc, char **argv)
 	int stress_test = 0;
 	ipguard_cfg_t *cfg = NULL;	/* use common config */
 
-	ipguard_init(cfg);
-
 	while (1) {
 		ret = getopt(argc, argv, "vprs:S");
 		if (ret == -1)
