@@ -174,17 +174,16 @@ ipguard_check_access(request_rec *r)
 
 	c = (ipguard_srv_cfg *) ap_get_module_config(r->server->module_config,
 												&ipguard_module);
-	d = ap_get_module_config(r->per_dir_config, &ipguard_module);
-
 #if SS_DEBUG
+	d = ap_get_module_config(r->per_dir_config, &ipguard_module);
 	ap_log_rerror(APLOG_MARK, MODULE_LOG_LEVEL, 0, r,
 			"mod_ipguard: check acess\nc=%x d=%x ce=%d de=%d sp=\"%s\" c=%x cfg=%x ss_dt=\n%s",
 			c, d, c->engine, d->check, c->socket_path, c, c->cfg, ss_debug_trace);
 #endif
-
 	if (c->engine != IPGUARD_ON)
 		return OK;
 
+	d = ap_get_module_config(r->per_dir_config, &ipguard_module);
 	if (d->check != IPGUARD_ON)
 		return OK;
 
@@ -194,7 +193,7 @@ ipguard_check_access(request_rec *r)
 	c->cfg->apache_req = NULL;
 	ret = (ret == IPGUARD_OK) ? OK : HTTP_FORBIDDEN;
 
-	if (1||c->debug == IPGUARD_ON) {
+	if (c->debug == IPGUARD_ON || ret != OK) {
 		ap_log_rerror(APLOG_MARK, MODULE_LOG_LEVEL, 0, r,
 					"mod_ipguard: %s access for %s (%s)",
 					ret == OK ? "granted" : "denied",
