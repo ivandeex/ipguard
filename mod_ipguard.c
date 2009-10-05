@@ -19,6 +19,7 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include <pthread.h>
 #include <sys/socket.h>
 
 #include "httpd.h"
@@ -37,11 +38,10 @@
 
 /* dirty! dirty! do not link, just include */
 #define IPGUARD_APACHE_MODULE 1
-#define IPGUARD_PTHREADS 1
+#define IPGUARD_PTHREADS 0
 #define MODULE_INTERNAL static
 #define MODULE_LOG_LEVEL APLOG_NOTICE
 #include "ipguard-client.c"
-
 
 module AP_MODULE_DECLARE_DATA ipguard_module;
 
@@ -69,6 +69,9 @@ typedef struct ipguard_dir_cfg_st {
 #define IPGUARD_OFF		0
 #define IPGUARD_ON		1
 
+static pthread_mutex_t ipguard_global_mutex = PTHREAD_MUTEX_INITIALIZER;
+#define ipguard_lock()		pthread_mutex_lock(&ipguard_global_mutex)
+#define ipguard_unlock()	pthread_mutex_unlock(&ipguard_global_mutex)
 
 #define SS_DEBUG 0
 
@@ -148,10 +151,12 @@ ipguard_post_config(apr_pool_t *p, apr_pool_t *plog, apr_pool_t *ptemp, server_r
 	while (NULL != s) {
 		c = (ipguard_srv_cfg *) ap_get_module_config(s->module_config, &ipguard_module);
 
+		ipguard_lock();
 		ipguard_set_debug(c->cfg, c->debug);
 		ipguard_set_restrictive(c->cfg, c->restrictive);
 		ipguard_set_socket_path(c->cfg, c->socket_path);
 		ipguard_set_enable(c->cfg, c->engine);
+		ipguard_unlock();
 
 		ssdebug("Spost(c=%x,cfg=%x,srv=%s,ena=%d,dbg=%d,sok=%s)\n",
 				c, c->cfg, s->defn_name?s->defn_name:"none", c->engine, c->debug,
@@ -188,8 +193,10 @@ ipguard_check_access(request_rec *r)
 		return OK;
 
 	c->cfg->apache_req = r;
+	ipguard_lock();
 	ret = ipguard_check_ipaddr(c->cfg, r->connection->remote_ip,
 								reply, sizeof(reply));
+	ipguard_unlock();
 	c->cfg->apache_req = NULL;
 	ret = (ret == IPGUARD_OK) ? OK : HTTP_FORBIDDEN;
 

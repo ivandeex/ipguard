@@ -1,6 +1,8 @@
 %global rhel %((head -1 /etc/redhat-release 2>/dev/null || echo 0) | tr -cd 0-9 | cut -c1)
 %define rdist .vitki01%{?dist}%{!?dist:.el%{rhel}}
 
+%global apxs %{_sbindir}/apxs
+
 Name:           ipguard
 Version:        0.4
 Release:        1%{rdist}
@@ -26,14 +28,14 @@ in peerguardian format (guarding.p2p).
 %build
 %configure
 make %{?_smp_mflags}
-/usr/sbin/apxs -c mod_ipguard.c
+%apxs -Wc,-Wall -Wc,-Werror -c mod_ipguard.c
 
 %install
 rm -rf %{buildroot}
 %makeinstall
 mkdir -p %{buildroot}%{_libdir}/httpd/modules 
 mkdir -p %{buildroot}%{_sysconfdir}/httpd/conf.d
-/usr/sbin/apxs -i -S LIBEXECDIR=%{buildroot}%{_libdir}/httpd/modules mod_ipguard.la
+%apxs -i -S LIBEXECDIR=%{buildroot}%{_libdir}/httpd/modules mod_ipguard.la
 cp -p mod_ipguard.conf %{buildroot}%{_sysconfdir}/httpd/conf.d/ipguard.conf
 
 %clean
