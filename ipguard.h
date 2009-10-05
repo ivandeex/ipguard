@@ -16,8 +16,10 @@
 #ifndef _IPGUARD_CLIENT_H
 #define _IPGUARD_CLIENT_H
 
+#if 0
 #ifdef __cplusplus
 extern "C" {
+#endif
 #endif
 
 #define IPGUARD_DEF_SOCKET_PATH	"/var/run/ipguard.sock"
@@ -65,14 +67,17 @@ MODULE_INTERNAL int ipguard_shutdown (ipguard_cfg_t *cfg);
 MODULE_INTERNAL int ipguard_check_ipaddr (ipguard_cfg_t *cfg, const char *ipaddr, char *answer, int answer_len);
 #ifndef IPGUARD_APACHE_MODULE
 MODULE_INTERNAL int ipguard_check_ip (ipguard_cfg_t *cfg, unsigned long ip, char *answer, int answer_len);
+MODULE_INTERNAL int ipguard_check_sockaddr (ipguard_cfg_t *cfg, void *sockaddr_ptr, char *answer, int answer_len);
 #endif
 MODULE_INTERNAL int ipguard_set_debug (ipguard_cfg_t *cfg, int debug);
 MODULE_INTERNAL int ipguard_set_restrictive (ipguard_cfg_t *cfg, int restrictive);
 MODULE_INTERNAL int ipguard_set_enable (ipguard_cfg_t *cfg, int enable);
 MODULE_INTERNAL int ipguard_set_socket_path (ipguard_cfg_t *cfg, const char *socket_path);
 
+#if 0
 #ifdef __cplusplus
 }
+#endif
 #endif
 
 #endif /* IPGUARD_CLIENT_H */

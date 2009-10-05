@@ -109,8 +109,7 @@ main(int argc, char **argv)
 	int ret;
 	char buf[80], addr[80];
 	int stress_test = 0;
-	ipguard_cfg_t cfg_buf;
-	ipguard_cfg_t *cfg = &cfg_buf;
+	ipguard_cfg_t *cfg = NULL;	/* use common config */
 
 	ipguard_init(cfg);
 

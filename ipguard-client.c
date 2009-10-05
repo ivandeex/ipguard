@@ -25,6 +25,10 @@
 
 #include "ipguard.h"
 
+
+static ipguard_cfg_t ipguard_common_cfg;
+
+
 static int
 ipguard_log(ipguard_cfg_t *cfg, const char *fmt, ...)
 {
@@ -33,7 +37,7 @@ ipguard_log(ipguard_cfg_t *cfg, const char *fmt, ...)
 	va_list ap;
 
 	if (NULL == cfg)
-		return -1;
+		cfg = &ipguard_common_cfg;
 
 	len = sizeof(IPGUARD_LOG_PREFIX) - 1;
 	va_start(ap, fmt);
@@ -60,7 +64,7 @@ static int
 ipguard_disconnect(ipguard_cfg_t *cfg)
 {
 	if (NULL == cfg)
-		return -1;
+		cfg = &ipguard_common_cfg;
 	if (cfg->socket >= 0) {
 		close(cfg->socket);
 		cfg->socket = -1;
@@ -78,7 +82,7 @@ ipguard_connect(ipguard_cfg_t *cfg)
 	char erbuf[80];
 
 	if (NULL == cfg)
-		return -1;
+		cfg = &ipguard_common_cfg;
 
 	if (cfg->socket >= 0)
 		ipguard_disconnect(cfg);
@@ -115,7 +119,7 @@ ipguard_send_query(ipguard_cfg_t *cfg, const char *req, char *reply, int reply_l
 	int len = strlen(req);
 
 	if (NULL == cfg)
-		return -1;
+		cfg = &ipguard_common_cfg;
 
 	for (attempt = 0; attempt < 1; attempt++) {
 
@@ -190,7 +194,7 @@ ipguard_check_ipaddr(ipguard_cfg_t *cfg, const char *ipaddr, char *answer, int a
 	char req[80], reply[80];
 
 	if (NULL == cfg)
-		return -1;
+		cfg = &ipguard_common_cfg;
 
 	if (!cfg->enable) {
 		if (answer && answer_len > 0)
@@ -203,7 +207,7 @@ ipguard_check_ipaddr(ipguard_cfg_t *cfg, const char *ipaddr, char *answer, int a
 
 	/* leave only one request delimiter, at the end */
 	strncpy(req, ipaddr, sizeof(req) - 2);
-	for (i = 0; i < sizeof(req) - 2; i++) {
+	for (i = 0; i < (int)sizeof(req) - 2; i++) {
 		if (req[i] == '\0' || req[i] == '\n')
 			break;
 	}
@@ -248,7 +252,7 @@ ipguard_check_ip(ipguard_cfg_t *cfg, unsigned long ip, char *answer, int answer_
 	char ipaddr[20];
 
 	if (NULL == cfg)
-		return -1;
+		cfg = &ipguard_common_cfg;
 
 	ip = ntohl(ip);
 	sprintf(ipaddr, "%lu.%lu.%lu.%lu",
@@ -259,12 +263,40 @@ ipguard_check_ip(ipguard_cfg_t *cfg, unsigned long ip, char *answer, int answer_
 #endif /* !IPGUARD_APACHE_MODULE */
 
 
+#ifndef IPGUARD_APACHE_MODULE
+MODULE_INTERNAL int
+ipguard_check_sockaddr (ipguard_cfg_t *cfg, void *sockaddr_ptr, char *answer, int answer_len)
+{
+	struct sockaddr_in *sin_ptr = (struct sockaddr_in *) sockaddr_ptr;
+	if (NULL == cfg)
+		cfg = &ipguard_common_cfg;
+
+	if (NULL == sin_ptr) {
+		if (answer && answer_len > 0)
+			strncpy(answer, "NULL", answer_len);
+		if (cfg->debug)
+			ipguard_log(cfg, "sockaddr_ptr is null");
+		return -1;
+	}
+	if (sin_ptr->sin_family != AF_INET) {
+		if (answer && answer_len > 0)
+			strncpy(answer, "NOT AF_INET", answer_len);
+		if (cfg->debug)
+			ipguard_log(cfg, "sockaddr_ptr is not AF_INET");
+		return -1;
+	}
+	return ipguard_check_ip(cfg, sin_ptr->sin_addr.s_addr, answer, answer_len);
+}
+#endif /* !IPGUARD_APACHE_MODULE */
+
+
 MODULE_INTERNAL int
 ipguard_set_debug(ipguard_cfg_t *cfg, int new_debug)
 {
 	int old_debug;
 	if (NULL == cfg)
-		return -1;
+		cfg = &ipguard_common_cfg;
+
 	old_debug = cfg->debug;
 	if (new_debug != -1)
 		cfg->debug = !!new_debug;
@@ -277,7 +309,8 @@ ipguard_set_restrictive(ipguard_cfg_t *cfg, int new_restrictive)
 {
 	int old_restrictive;
 	if (NULL == cfg)
-		return -1;
+		cfg = &ipguard_common_cfg;
+
 	old_restrictive = cfg->restrictive;
 	if (new_restrictive != -1)
 		cfg->restrictive = new_restrictive;
@@ -290,7 +323,8 @@ ipguard_set_enable(ipguard_cfg_t *cfg, int new_enable)
 {
 	int old_enable;
 	if (NULL == cfg)
-		return -1;
+		cfg = &ipguard_common_cfg;
+
 	old_enable = cfg->enable;
 	if (new_enable != -1) {
 		cfg->enable = !!new_enable;
@@ -306,8 +340,10 @@ ipguard_set_enable(ipguard_cfg_t *cfg, int new_enable)
 MODULE_INTERNAL int
 ipguard_set_socket_path(ipguard_cfg_t *cfg, const char *new_socket_path)
 {
-	if (NULL == cfg
-			|| NULL == new_socket_path || 0 == *new_socket_path
+	if (NULL == cfg)
+		cfg = &ipguard_common_cfg;
+
+	if (NULL == new_socket_path || 0 == *new_socket_path
 			|| strlen(new_socket_path) >= sizeof(cfg->socket_path))
 		return -1;
 	if (0 == strcmp(cfg->socket_path, new_socket_path))
@@ -325,7 +361,7 @@ MODULE_INTERNAL int
 ipguard_init(ipguard_cfg_t *cfg)
 {
 	if (NULL == cfg)
-		return -1;
+		cfg = &ipguard_common_cfg;
 
 	cfg->enable = IPGUARD_DEF_ENABLE;
 	cfg->debug = IPGUARD_DEF_DEBUG;
@@ -350,7 +386,8 @@ MODULE_INTERNAL int
 ipguard_shutdown(ipguard_cfg_t *cfg)
 {
 	if (NULL == cfg)
-		return -1;
+		cfg = &ipguard_common_cfg;
+
 	ipguard_disconnect(cfg);
 	cfg->enable = 0;
 #if IPGUARD_PTHREADS
