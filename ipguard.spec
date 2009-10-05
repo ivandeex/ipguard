@@ -4,7 +4,7 @@
 %global apxs %{_sbindir}/apxs
 
 Name:           ipguard
-Version:        0.4
+Version:        0.5
 Release:        1%{rdist}
 Summary:        Blocks connections from/to hosts listed by PeerGuardian etc.
 

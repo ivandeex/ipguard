@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT([ipguard], [0.4], [rpmadminATvitki.net])
+AC_INIT([ipguard], [0.5], [rpmadminATvitki.net])
 
 AC_CONFIG_SRCDIR([ipguard.h])
 AC_PROG_LIBTOOL
