@@ -41,8 +41,11 @@ ipguard_log(ipguard_cfg_t *cfg, const char *fmt, ...)
 	va_end(ap);
 
 #ifdef IPGUARD_APACHE_MODULE
+  #ifndef MODULE_LOG_LEVEL
+  #define MODULE_LOG_LEVEL APLOG_NOTICE
+  #endif
 	if (cfg->apache_req)
-		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, cfg->apache_req, "%s", buf);
+		ap_log_rerror(APLOG_MARK, MODULE_LOG_LEVEL, 0, cfg->apache_req, "%s", buf);
 #else  /* !IPGUARD_APACHE_MODULE */
 	strcat(buf, "\n");
 	fputs(buf, stdout);
@@ -207,6 +210,12 @@ ipguard_check_ipaddr(ipguard_cfg_t *cfg, const char *ipaddr, char *answer, int a
 	req[i++] = '\n';
 	req[i] = '\0';
 
+	if (0 == strcmp(req, "::1\n")) {
+		if (answer && answer_len > 0)
+			strncpy(answer, "OK", answer_len);
+		return 0;
+	}
+
 	ipguard_mutex_lock(cfg);
 	ret = ipguard_send_query(cfg, req, reply, sizeof(reply) - 1);
 	ipguard_mutex_unlock(cfg);
@@ -317,14 +326,21 @@ ipguard_init(ipguard_cfg_t *cfg)
 {
 	if (NULL == cfg)
 		return -1;
-	strcpy(cfg->socket_path, IPGUARD_DEF_SOCKET_PATH);
+
 	cfg->enable = IPGUARD_DEF_ENABLE;
 	cfg->debug = IPGUARD_DEF_DEBUG;
 	cfg->restrictive = IPGUARD_DEF_RESTRICTIVE;
 	cfg->socket = -1;
+	strcpy(cfg->socket_path, IPGUARD_DEF_SOCKET_PATH);
+
 #if IPGUARD_PTHREADS
 	pthread_mutex_init(&(cfg->mutex), NULL);
 #endif /* IPGUARD_PTHREADS */
+
+#ifdef IPGUARD_APACHE_MODULE
+	cfg->apache_req = NULL;
+#endif /* IPGUARD_APACHE_MODULE */
+
 	return 0;
 }
 
