@@ -63,13 +63,16 @@ ipguard_log(ipguard_cfg_t *cfg, const char *fmt, ...)
 	vsnprintf(buf + len, sizeof(buf) - len - 2, fmt, ap);
 	va_end(ap);
 
-#ifdef IPGUARD_APACHE_MODULE
+#if defined(IPGUARD_APACHE_MODULE)
   #ifndef MODULE_LOG_LEVEL
   #define MODULE_LOG_LEVEL APLOG_NOTICE
   #endif
-	if (cfg->apache_req)
-		ap_log_rerror(APLOG_MARK, MODULE_LOG_LEVEL, 0, cfg->apache_req, "%s", buf);
-#else  /* !IPGUARD_APACHE_MODULE */
+	if (cfg->req)
+		ap_log_rerror(APLOG_MARK, MODULE_LOG_LEVEL, 0, cfg->req, "%s", buf);
+#elif defined(IPGUARD_NGINX_MODULE)
+    if (cfg->req)
+        ipguard_ngx_log(cfg->req->connection->log, MODULE_LOG_LEVEL, "%s", buf);
+#else  /* !IPGUARD_APACHE_MODULE && !IPGUARD_NGINX_MODULE */
   #if IPGUARD_CURSES
 	strcat(buf, "\r");
   #endif
@@ -206,6 +209,10 @@ ipguard_send_query(ipguard_cfg_t *cfg, const char *req, char *reply, int reply_l
 	if (cfg->debug)
 		ipguard_log(cfg, "validation response: \"%s\"", reply);
 
+#if defined(IPGUARD_NO_KEEPALIVE)
+	ipguard_disconnect(cfg);
+#endif
+
 	return 0;
 }
 
@@ -268,7 +275,7 @@ ipguard_check_ipaddr(ipguard_cfg_t *cfg, const char *ipaddr, char *answer, int a
 }
 
 
-#ifndef IPGUARD_APACHE_MODULE
+#if !defined(IPGUARD_APACHE_MODULE)
 MODULE_INTERNAL int
 ipguard_check_ip(ipguard_cfg_t *cfg, unsigned long ip, char *answer, int answer_len)
 {
@@ -286,7 +293,7 @@ ipguard_check_ip(ipguard_cfg_t *cfg, unsigned long ip, char *answer, int answer_
 #endif /* !IPGUARD_APACHE_MODULE */
 
 
-#ifndef IPGUARD_APACHE_MODULE
+#if !defined(IPGUARD_APACHE_MODULE)
 MODULE_INTERNAL int
 ipguard_check_sockaddr (ipguard_cfg_t *cfg, void *sockaddr_ptr, char *answer, int answer_len)
 {
@@ -397,15 +404,15 @@ ipguard_init(ipguard_cfg_t *cfg)
 	pthread_mutex_init(&(cfg->mutex), NULL);
 #endif /* IPGUARD_PTHREADS */
 
-#ifdef IPGUARD_APACHE_MODULE
-	cfg->apache_req = NULL;
+#if defined(IPGUARD_APACHE_MODULE) || defined(IPGUARD_NGINX_MODULE)
+	cfg->req = NULL;
 #endif /* IPGUARD_APACHE_MODULE */
 
 	return 0;
 }
 
 
-#ifndef IPGUARD_APACHE_MODULE
+#if !defined(IPGUARD_APACHE_MODULE) && !defined(IPGUARD_NGINX_MODULE)
 MODULE_INTERNAL int
 ipguard_shutdown(ipguard_cfg_t *cfg)
 {
@@ -417,8 +424,8 @@ ipguard_shutdown(ipguard_cfg_t *cfg)
 #if IPGUARD_PTHREADS
 	pthread_mutex_destroy(&(cfg->mutex));
 #endif /* IPGUARD_PTHREADS */
-#ifdef IPGUARD_APACHE_MODULE
-	cfg->apache_req = NULL;
+#if defined(IPGUARD_APACHE_MODULE) || defined(IPGUARD_NGINX_MODULE)
+	cfg->req = NULL;
 #endif /* IPGUARD_APACHE_MODULE */
 	return 0;
 }

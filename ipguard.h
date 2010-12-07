@@ -55,17 +55,17 @@ typedef struct ipguard_cfg {
 #if IPGUARD_PTHREADS
 	pthread_mutex_t mutex;
 #endif /* IPGUARD_PTHREADS */
-#ifdef IPGUARD_APACHE_MODULE
-	request_rec *apache_req;
+#if defined(IPGUARD_APACHE_MODULE) || defined(IPGUARD_NGINX_MODULE)
+	request_rec *req;
 #endif /* IPGUARD_APACHE_MODULE */
 } ipguard_cfg_t;
 
 MODULE_INTERNAL int ipguard_init (ipguard_cfg_t *cfg);
-#ifndef IPGUARD_APACHE_MODULE
+#if !defined(IPGUARD_APACHE_MODULE) && !defined(IPGUARD_NGINX_MODULE)
 MODULE_INTERNAL int ipguard_shutdown (ipguard_cfg_t *cfg);
 #endif
 MODULE_INTERNAL int ipguard_check_ipaddr (ipguard_cfg_t *cfg, const char *ipaddr, char *answer, int answer_len);
-#ifndef IPGUARD_APACHE_MODULE
+#if !defined(IPGUARD_APACHE_MODULE)
 MODULE_INTERNAL int ipguard_check_ip (ipguard_cfg_t *cfg, unsigned long ip, char *answer, int answer_len);
 MODULE_INTERNAL int ipguard_check_sockaddr (ipguard_cfg_t *cfg, void *sockaddr_ptr, char *answer, int answer_len);
 #endif

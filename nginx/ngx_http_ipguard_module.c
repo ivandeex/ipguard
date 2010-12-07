@@ -22,19 +22,9 @@
  */
 
 
-#include "ngx_http_pubcookie.h"
-#include <ctype.h>
-
-
-/***********************************
- * dirty! dirty! do not link, just include
- */
-
-#define IPGUARD_APACHE_MODULE 1
-#define IPGUARD_PTHREADS 0
-#define MODULE_INTERNAL static
-#define MODULE_LOG_LEVEL APLOG_NOTICE
-#include "ipguard-client.c"
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
 
 
 /***********************************
@@ -45,7 +35,7 @@ static int ipguard_debug;
 
 #define IPGUARD_LOG_DEBUG   NGX_LOG_WARN
 
-#define ipguard_log(log,verb,args...) \
+#define ipguard_ngx_log(log,verb,args...) \
         do { \
             ngx_uint_t _verb = (verb); \
             ngx_log_t *_log = (log); \
@@ -57,10 +47,25 @@ static int ipguard_debug;
 
 
 /***********************************
+ * dirty! dirty! do not link, just include
+ */
+
+#define ipguard_lock()		(0)
+#define ipguard_unlock()	(0)
+
+#define IPGUARD_NGINX_MODULE 1
+#define IPGUARD_PTHREADS 0
+#define MODULE_INTERNAL static
+#define MODULE_LOG_LEVEL IPGUARD_LOG_DEBUG
+typedef ngx_http_request_t request_rec;
+#include "ipguard-client.c"
+
+
+/***********************************
  * Prototypes
  */
 
-#define ipguard_module ngx_http_ipguard_module
+extern ngx_module_t ngx_http_ipguard_module;
 
 #define ngx_strcasecmp_c(ns,cs) ((ns).len == sizeof(cs)-1 && \
                             ! ngx_strncasecmp((ns).data, (u_char*)(cs), sizeof(cs)-1))
@@ -92,7 +97,7 @@ typedef struct
  */
 
 static char *
-ipguard_post_debug (ngx_conf_t *cf, void *data, void *conf)
+ngx_ipguard_post_debug (ngx_conf_t *cf, void *data, void *conf)
 {
     ngx_flag_t *fp = conf;
     ipguard_debug = *fp;
@@ -100,29 +105,29 @@ ipguard_post_debug (ngx_conf_t *cf, void *data, void *conf)
 }
 
 static char *
-ipguard_post_ipguard (ngx_conf_t *cf, void *data, void *conf)
+ngx_ipguard_post_ipguard (ngx_conf_t *cf, void *data, void *conf)
 {
     ngx_ipguard_srv_t *srv;
     ngx_flag_t *fp = conf;
     if (*fp) {
-        srv = ngx_http_conf_get_module_srv_conf(cf, ipguard_module);
+        srv = ngx_http_conf_get_module_srv_conf(cf, ngx_http_ipguard_module);
         srv->enable = 1;
     }
     return NGX_CONF_OK;
 }
 
-static ngx_conf_post_t pubcookie_conf_debug = { ipguard_post_debug };
-static ngx_conf_post_t pubcookie_conf_ipguard = { ipguard_post_ipguard };
+static ngx_conf_post_t ngx_ipguard_conf_debug = { ngx_ipguard_post_debug };
+static ngx_conf_post_t ngx_ipguard_conf_ipguard = { ngx_ipguard_post_ipguard };
 
-static const command_rec
-ipguard_commands[] = {
+static const ngx_command_t
+ngx_ipguard_commands[] = {
 
     /* ... */
     { ngx_string("ipguard_socket"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_CONF_TAKE1,
       ngx_conf_set_str_slot,
       NGX_HTTP_SRV_CONF_OFFSET,
-      offsetof(ngx_ipguard_srv_t, socket_path_str),
+      offsetof(ngx_ipguard_srv_t, socket_path),
       NULL },
 
     /* ... */
@@ -130,7 +135,7 @@ ipguard_commands[] = {
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_CONF_FLAG,
       ngx_conf_set_flag_slot,
       NGX_HTTP_SRV_CONF_OFFSET,
-      offsetof(ngx_pubcookie_srv_t, restrictive),
+      offsetof(ngx_ipguard_srv_t, restrictive),
       NULL },
 
     /* ... */
@@ -139,7 +144,7 @@ ipguard_commands[] = {
       ngx_conf_set_flag_slot,
       NGX_HTTP_SRV_CONF_OFFSET,
       offsetof(ngx_ipguard_srv_t, debug),
-      &ipguard_conf_debug },
+      &ngx_ipguard_conf_debug },
 
     /* ... */
     { ngx_string("ipguard"),
@@ -147,55 +152,63 @@ ipguard_commands[] = {
       ngx_conf_set_flag_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_ipguard_loc_t, check),
-      &ipguard_conf_ipguard },
+      &ngx_ipguard_conf_ipguard },
 
     ngx_null_command
 };
 
 static void *
-ipguard_srv_create (ngx_conf_t *cf)
+ngx_ipguard_srv_create (ngx_conf_t *cf)
 {
     ngx_ipguard_srv_t *srv = ngx_pcalloc(cf->pool, sizeof(ngx_ipguard_srv_t));
     if (!srv)
         return NULL;
     srv->enable = NGX_CONF_UNSET;
     srv->restrictive = NGX_CONF_UNSET;
+    srv->debug = NGX_CONF_UNSET;
     return (void *) srv;
 }
 
 static char *
-ipguard_srv_merge (ngx_conf_t *cf, void *parent, void *child)
+ngx_ipguard_srv_merge (ngx_conf_t *cf, void *parent, void *child)
 {
     ngx_ipguard_srv_t *prv = parent;
     ngx_ipguard_srv_t *srv = child;
     char *socket_path;
+    ngx_http_core_srv_conf_t *core_scf = ngx_http_conf_get_module_srv_conf(cf, ngx_http_core_module);
 
-    ngx_conf_merge_value(srv->enable, prv->enable, 0);
-    ngx_conf_merge_value(srv->restrictive, prv->restrictive, 0);
-    ngx_conf_merge_str_value(srv->socket_path, prv->socket_path, "");
+    ngx_conf_merge_value(srv->enable, prv->enable, IPGUARD_DEF_ENABLE);
+    ngx_conf_merge_value(srv->restrictive, prv->restrictive, IPGUARD_DEF_RESTRICTIVE);
+    ngx_conf_merge_value(srv->debug, prv->debug, IPGUARD_DEF_DEBUG);
+    ngx_conf_merge_str_value(srv->socket_path, prv->socket_path, IPGUARD_DEF_SOCKET_PATH);
 
     srv->cfg = ngx_pcalloc(cf->pool, sizeof(ipguard_cfg_t));
-    socket_path = ngx_pnalloc(cf->pool, srv->socket_path.len + 1)
+    socket_path = ngx_pnalloc(cf->pool, srv->socket_path.len + 1);
     if (!srv->cfg || !socket_path)
         return "not enough memory for ipguard";
 
     if (srv->socket_path.len)
         ngx_memcpy((u_char *) socket_path, srv->socket_path.data, srv->socket_path.len);
-    dst[srv->socket_path.len] = '\0';
+    socket_path[srv->socket_path.len] = '\0';
 
 	ipguard_init(srv->cfg);
     ipguard_lock();
     ipguard_set_debug(srv->cfg, srv->debug);
     ipguard_set_restrictive(srv->cfg, srv->restrictive);
-    ipguard_set_socket_path(srv->cfg, srv->socket_path);
-    ipguard_set_enable(srv->cfg, srv->engine);
+    ipguard_set_socket_path(srv->cfg, socket_path);
+    ipguard_set_enable(srv->cfg, srv->enable);
     ipguard_unlock();
+
+    ipguard_ngx_log(cf->log, NGX_LOG_DEBUG,
+                    "init ipguard: server=%V enable=%d restrict=%d debug=%d socket=%s",
+                    &core_scf->server_name, srv->enable, srv->restrictive,
+                    srv->debug, socket_path);
 
     return NGX_CONF_OK;
 }
 
 static void *
-ipguard_loc_create (ngx_conf_t *cf)
+ngx_ipguard_loc_create (ngx_conf_t *cf)
 {
     ngx_ipguard_loc_t *loc = ngx_pcalloc(cf->pool, sizeof(ngx_ipguard_loc_t));
     if (!loc)
@@ -205,15 +218,15 @@ ipguard_loc_create (ngx_conf_t *cf)
 }
 
 static char *
-ipguard_loc_merge (ngx_conf_t *cf, void *parent, void *child)
+ngx_ipguard_loc_merge (ngx_conf_t *cf, void *parent, void *child)
 {
-    ngx_pubcookie_loc_t  *prv = parent;
-    ngx_pubcookie_loc_t  *loc = child;
+    ngx_ipguard_loc_t  *prv = parent;
+    ngx_ipguard_loc_t  *loc = child;
     ngx_ipguard_srv_t *srv;
 
     ngx_conf_merge_value(loc->check, prv->check, 0);
-    if (lock->check) {
-        srv = ngx_http_conf_get_module_srv_conf(cf, ipguard_module);
+    if (loc->check) {
+        srv = ngx_http_conf_get_module_srv_conf(cf, ngx_http_ipguard_module);
         srv->enable = 1;
     }
 
@@ -224,32 +237,40 @@ ipguard_loc_merge (ngx_conf_t *cf, void *parent, void *child)
 /* Authentication */
 
 static int
-ipguard_auth_hook (ngx_http_request_t * r)
+ngx_ipguard_auth_hook (ngx_http_request_t * r)
 {
-    ipguard_loc_t *loc = ngx_http_get_module_loc_conf(r, ipguard_module);
-    ipguard_srv_t *srv = ngx_http_get_module_srv_conf(r, ipguard_module);
+    ngx_ipguard_loc_t *loc = ngx_http_get_module_loc_conf(r, ngx_http_ipguard_module);
+    ngx_ipguard_srv_t *srv = ngx_http_get_module_srv_conf(r, ngx_http_ipguard_module);
 	char reply[80];
     int ret;
 
     /* pass if subrequest */
     if (r != r->main)
-        return OK;
+        return NGX_OK;
+
+    /*ipguard_ngx_log(r->connection->log, NGX_LOG_DEBUG,
+                    "... ipguard check loc=%p check=%d uri=%V",
+                    loc, loc ? loc->check : -1, &r->uri);*/
 
     /* pass if not enabled */
-    if (!cfg || !cfg->check || !srv || !srv->enable)
-        return DECLINED;
+    if (!loc || !loc->check || !srv || !srv->enable)
+        return NGX_DECLINED;
 
     /* pass if request is for favicon or robots */
     if (ngx_strcasecmp_c (r->uri, "/favicon.ico")
         || ngx_strcasecmp_c (r->uri, "/robots.txt"))
-        return OK;
+        return NGX_OK;
 
-	srv->cfg->apache_req = r;
+	srv->cfg->req = r;
 	ipguard_lock();
-	ret = ipguard_check_sockaddr(c->cfg, r->connection->sockaddr,
+	ret = ipguard_check_sockaddr(srv->cfg, r->connection->sockaddr,
 								reply, sizeof(reply));
 	ipguard_unlock();
-	srv->cfg->apache_req = NULL;
+	srv->cfg->req = NULL;
+
+    ipguard_ngx_log(r->connection->log, NGX_LOG_DEBUG,
+                    "ipguard check result: ret=%d uri=%V",
+                    ret, &r->uri);
 
     return (ret == IPGUARD_OK ? NGX_OK : NGX_HTTP_FORBIDDEN);
 }
@@ -257,7 +278,7 @@ ipguard_auth_hook (ngx_http_request_t * r)
 /* Initialize after config file commands have been processed */
 
 static ngx_int_t
-ipguard_init (ngx_conf_t *cf)
+ngx_ipguard_init (ngx_conf_t *cf)
 {
     ngx_http_handler_pt        *h;
     ngx_http_core_main_conf_t  *core_cf;
@@ -266,33 +287,29 @@ ipguard_init (ngx_conf_t *cf)
 
     if (! (h = ngx_array_push(&core_cf->phases[NGX_HTTP_ACCESS_PHASE].handlers)))
         return NGX_ERROR;
-    *h = ipguard_authz_hook;
+    *h = ngx_ipguard_auth_hook;
 
     return NGX_OK;
 }
 
 
-
 static ngx_http_module_t
-ipguard_module_ctx = {
+ngx_http_ipguard_module_ctx = {
     NULL,                     /* preconfiguration */
-    ipguard_init,             /* postconfiguration */
-
+    ngx_ipguard_init,         /* postconfiguration */
     NULL,                     /* create main configuration */
     NULL,                     /* init main configuration */
-
-    ipguard_srv_create,       /* create server configuration */
-    ipguard_srv_merge,        /* merge server configuration */
-
-    ipguard_loc_create,       /* create location configuration */
-    ipguard_loc_merge         /* merge location configuration */
+    ngx_ipguard_srv_create,   /* create server configuration */
+    ngx_ipguard_srv_merge,    /* merge server configuration */
+    ngx_ipguard_loc_create,   /* create location configuration */
+    ngx_ipguard_loc_merge     /* merge location configuration */
 };
 
 ngx_module_t
-ipguard_module = {
+ngx_http_ipguard_module = {
     NGX_MODULE_V1,
-    &ipguard_module_ctx,                   /* module context */
-    (command_rec *) ipguard_commands,      /* module directives */
+    &ngx_http_ipguard_module_ctx,          /* module context */
+    (ngx_command_t *)ngx_ipguard_commands, /* module directives */
     NGX_HTTP_MODULE,                       /* module type */
     NULL,                                  /* init master */
     NULL,                                  /* init module */
