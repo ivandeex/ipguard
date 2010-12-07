@@ -1,11 +1,11 @@
 %global rhel %((head -1 /etc/redhat-release 2>/dev/null || echo 0) | tr -cd 0-9 | cut -c1)
-%define rdist .vitki01%{?dist}%{!?dist:.el%{rhel}}
+%define rdist .vitki.02%{?dist}%{!?dist:.el%{rhel}}
 
 %global apxs %{_sbindir}/apxs
 
 Name:           ipguard
 Version:        0.5
-Release:        1%{rdist}
+Release:        %{rdist}
 Summary:        Blocks connections from/to hosts listed by PeerGuardian etc.
 
 Group:          System Environment/Daemons
@@ -84,6 +84,9 @@ fi
 %config(noreplace) %{_sysconfdir}/httpd/conf.d/ipguard.conf
 
 %changelog
+* Tue Dec  7 2010  vitki <vitki@vitki.net> 0.9rc2-vitki.02
+- add nginx module
+
 * Sun Oct  4 2009  RPM Admin <rpmadmin@vitki.net> 0.9rc2-1.vitki01
 - port to centos
 
