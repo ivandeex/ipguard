@@ -45,8 +45,6 @@
 
 #define DEF_SOCKET_PATH	"/var/run/ipguard.sock"
 
-#define CHECK_INTERVAL	5	/* seconds between checks */
-
 #define MAX_FILE_NAME	256
 
 #define MAX_LISTEN		1024

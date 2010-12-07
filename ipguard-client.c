@@ -145,6 +145,9 @@ ipguard_send_query(ipguard_cfg_t *cfg, const char *req, char *reply, int reply_l
 	int i, n, k, attempt;
 	char erbuf[80];
 	int len = strlen(req);
+	fd_set fds;
+	struct timeval tv0;
+	int sel;
 
 	if (NULL == cfg)
 		cfg = ipguard_get_common_cfg();
@@ -160,9 +163,37 @@ ipguard_send_query(ipguard_cfg_t *cfg, const char *req, char *reply, int reply_l
 			attempt++;
 		}
 
+        tv0.tv_sec = IPGUARD_SERVER_TIMEOUT;
+        tv0.tv_usec = 0;
 		i = 0;
 		n = 1;
+
 		while (i < len && (n > 0 || (n < 0 && errno == EINTR))) {
+            struct timeval tv = tv0;
+            FD_ZERO(&fds);
+            FD_SET(cfg->socket, &fds);
+
+            sel = select(cfg->socket + 1, NULL, &fds, NULL, &tv);
+            if (sel == -1) {
+                if (errno == EINTR) {
+                    if (cfg->debug)
+                        ipguard_log(cfg, "recv select caught eintr, sec=%d",
+                                    (int) tv.tv_sec);
+                    tv0 = tv;   /* use remaining time */
+                    continue;
+                }
+                if (cfg->debug)
+                    ipguard_log(cfg, "ipguard send select error %d", errno);
+                break;
+            }
+            if (!sel) {
+                if (cfg->debug)
+                    ipguard_log(cfg, "ipguard send timeout");
+                break;
+            }
+            tv0.tv_sec = IPGUARD_SERVER_TIMEOUT;    /* reload timeout */
+            tv0.tv_usec = 0;
+
 			n = send(cfg->socket, req + i, len - i, MSG_NOSIGNAL);
 			if (n > 0)
 				i += n;
@@ -174,10 +205,9 @@ ipguard_send_query(ipguard_cfg_t *cfg, const char *req, char *reply, int reply_l
 			break;
 
 		if (attempt > 0) {
-			if (cfg->debug) {
+			if (cfg->debug)
 				ipguard_log(cfg, "cannot send query (%s)",
-						strerror_r(errno, erbuf, sizeof(erbuf)));
-			}
+	    					strerror_r(errno, erbuf, sizeof(erbuf)));
 			return -1;
 		}
 
@@ -187,9 +217,37 @@ ipguard_send_query(ipguard_cfg_t *cfg, const char *req, char *reply, int reply_l
 	if (cfg->debug)
 		ipguard_log(cfg, "request sent");
 
+    tv0.tv_sec = IPGUARD_SERVER_TIMEOUT;
+    tv0.tv_usec = 0;
 	i = 0;
 	n = 1;
+
 	while (i < reply_len - 1 && (n > 0 || (n < 0 && errno == EINTR))) {
+        struct timeval tv = tv0;
+        FD_ZERO(&fds);
+        FD_SET(cfg->socket, &fds);
+
+        sel = select(cfg->socket + 1, &fds, NULL, NULL, &tv);
+        if (sel == -1) {
+            if (errno == EINTR) {
+                if (cfg->debug)
+                    ipguard_log(cfg, "send select caught eintr, sec=%d",
+                                (int) tv.tv_sec);
+                tv0 = tv;   /* use remaining time */
+                continue;
+            }
+            if (cfg->debug)
+                ipguard_log(cfg, "ipguard recv select error %d", errno);
+            return -1;
+        }
+        if (!sel) {
+            if (cfg->debug)
+                ipguard_log(cfg, "ipguard recv timeout");
+            return -1;
+        }
+        tv0.tv_sec = IPGUARD_SERVER_TIMEOUT;    /* reload timeout */
+        tv0.tv_usec = 0;
+
 		n = recv(cfg->socket, reply + i, reply_len - i - 1, MSG_NOSIGNAL);
 		if (n > 0) {
 			for (k = i; k < i + n; k++) {
@@ -250,7 +308,7 @@ ipguard_check_ipaddr(ipguard_cfg_t *cfg, const char *ipaddr, char *answer, int a
 	ipguard_mutex_lock(cfg);
 	ret = ipguard_send_query(cfg, req, reply, sizeof(reply) - 1);
 	if (ret < 0 || !IPGUARD_KEEPALIVE)
-	    ipguard_disconnect();
+	    ipguard_disconnect(cfg);
 	ipguard_mutex_unlock(cfg);
 
 	if (ret < 0) {

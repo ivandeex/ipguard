@@ -22,8 +22,8 @@ extern "C" {
 #endif
 #endif
 
-/* keepalive causes bugs (but this workaround is unluky) */
 #define IPGUARD_KEEPALIVE 1
+#define IPGUARD_SERVER_TIMEOUT 4 /* seconds to wait for reply */
 
 #define IPGUARD_DEF_SOCKET_PATH	"/var/run/ipguard.sock"
 #define IPGUARD_DEF_ENABLE		0
