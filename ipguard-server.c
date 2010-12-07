@@ -82,6 +82,9 @@ static char socket_path[MAX_FILE_NAME] = DEF_SOCKET_PATH;
 int verbose;
 int log_allowed;
 
+static pthread_mutex_t count_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int count_threads;
+
 void reopen_logfile(void);
 
 
@@ -735,14 +738,27 @@ client_thread (void *arg)
 	char buf[80];
 	int off = 0;
 	int ret = 0;
+    int count;
+
+    pthread_mutex_lock(&count_mutex);
+    count = ++count_threads;
+    pthread_mutex_unlock(&count_mutex);
 
 	if (verbose)
-		log_action("spawn thread for socket %d", cli_sock);
+		log_action("spawn thread %d for socket %d", count, cli_sock);
 	while (ret == 0)
 		ret = handle_request(cli_sock, buf, sizeof(buf) - 1, &off);
-	close(cli_sock);
+
 	if (verbose)
 		log_action("disconnect client socket %d", cli_sock);
+	shutdown(cli_sock, SHUT_RDWR);
+	close(cli_sock);
+
+    pthread_mutex_lock(&count_mutex);
+    --count_threads;
+    pthread_mutex_unlock(&count_mutex);
+
+	pthread_exit(arg);
 	return arg;
 }
 
@@ -775,8 +791,10 @@ socket_server_loop(void)
 			log_action("pthread_create() failed: %s", strerror(ret));
 			off = 0;
 			handle_request(cli_sock, buf, sizeof(buf) - 1, &off);
+        	shutdown(cli_sock, SHUT_RDWR);
 			close(cli_sock);
 		}
+		pthread_detach(thread); /* to automatically reclaim memory upon exit */
 	}
 }
 

@@ -92,6 +92,7 @@ ipguard_disconnect(ipguard_cfg_t *cfg)
 		cfg = ipguard_get_common_cfg();
 
 	if (cfg->socket >= 0) {
+    	shutdown(cfg->socket, SHUT_RDWR);
 		close(cfg->socket);
 		cfg->socket = -1;
 		if (cfg->debug)
