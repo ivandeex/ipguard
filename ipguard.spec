@@ -1,5 +1,5 @@
 %global rhel %((head -1 /etc/redhat-release 2>/dev/null || echo 0) | tr -cd 0-9 | cut -c1)
-%define rdist .vitki.02%{?dist}%{!?dist:.el%{rhel}}
+%define rdist .vitki.03%{?dist}%{!?dist:.el%{rhel}}
 
 %global apxs %{_sbindir}/apxs
 
@@ -11,7 +11,7 @@ Summary:        Blocks connections from/to hosts listed by PeerGuardian etc.
 Group:          System Environment/Daemons
 License:        GPL
 URL:            http://www.vitki.net/
-Source0:        ipguard-%{version}.tar.gz
+Source0:        ipguard-%{version}-%{release}.tar.gz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 BuildRequires:  httpd-devel
@@ -84,8 +84,9 @@ fi
 %config(noreplace) %{_sysconfdir}/httpd/conf.d/ipguard.conf
 
 %changelog
-* Tue Dec  7 2010  vitki <vitki@vitki.net> 0.9rc2-vitki.02
+* Tue Dec  7 2010  vitki <vitki@vitki.net> 0.9rc2-vitki.03
 - add nginx module
+- fix unstable connection
 
 * Sun Oct  4 2009  RPM Admin <rpmadmin@vitki.net> 0.9rc2-1.vitki01
 - port to centos

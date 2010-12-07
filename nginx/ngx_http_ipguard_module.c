@@ -65,6 +65,8 @@ typedef ngx_http_request_t request_rec;
  * Prototypes
  */
 
+#define IPGUARD_ERR_STATUS NGX_HTTP_FORBIDDEN
+
 extern ngx_module_t ngx_http_ipguard_module;
 
 #define ngx_strcasecmp_c(ns,cs) ((ns).len == sizeof(cs)-1 && \
@@ -89,6 +91,7 @@ typedef struct
 	ngx_flag_t debug;
 	ngx_str_t  socket_path;
 	ngx_int_t  timeout;
+	ngx_int_t  err_status;
 	ipguard_cfg_t *cfg;
 } ngx_ipguard_srv_t;
 
@@ -166,6 +169,14 @@ ngx_ipguard_commands[] = {
       &ngx_ipguard_conf_timeout },
 
     /* ... */
+    { ngx_string("ipguard_err_status"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_SRV_CONF_OFFSET,
+      offsetof(ngx_ipguard_srv_t, err_status),
+      NULL },
+
+    /* ... */
     { ngx_string("ipguard"),
       NGX_HTTP_LOC_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_MAIN_CONF|NGX_CONF_FLAG,
       ngx_conf_set_flag_slot,
@@ -175,6 +186,7 @@ ngx_ipguard_commands[] = {
 
     ngx_null_command
 };
+
 
 static void *
 ngx_ipguard_srv_create (ngx_conf_t *cf)
@@ -186,6 +198,7 @@ ngx_ipguard_srv_create (ngx_conf_t *cf)
     srv->restrictive = NGX_CONF_UNSET;
     srv->debug = NGX_CONF_UNSET;
     srv->timeout = NGX_CONF_UNSET;
+    srv->err_status = NGX_CONF_UNSET;
     return (void *) srv;
 }
 
@@ -201,6 +214,7 @@ ngx_ipguard_srv_merge (ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_value(srv->restrictive, prv->restrictive, IPGUARD_DEF_RESTRICTIVE);
     ngx_conf_merge_value(srv->debug, prv->debug, IPGUARD_DEF_DEBUG);
     ngx_conf_merge_value(srv->timeout, prv->timeout, IPGUARD_SERVER_TIMEOUT);
+    ngx_conf_merge_value(srv->err_status, prv->err_status, IPGUARD_ERR_STATUS);
     ngx_conf_merge_str_value(srv->socket_path, prv->socket_path, IPGUARD_DEF_SOCKET_PATH);
 
     srv->cfg = ngx_pcalloc(cf->pool, sizeof(ipguard_cfg_t));
@@ -222,9 +236,9 @@ ngx_ipguard_srv_merge (ngx_conf_t *cf, void *parent, void *child)
     ipguard_unlock();
 
     ipguard_ngx_log(cf->log, NGX_LOG_DEBUG,
-        "ipguard(%V): enable=%d restrict=%d debug=%d timeout=%d socket=%s",
+        "ipguard(%V): enable=%d restrict=%d debug=%d timeout=%d status=%d socket=%s",
         &core_scf->server_name, srv->enable, srv->restrictive,
-        srv->debug, srv->timeout, socket_path);
+        srv->debug, srv->timeout, srv->err_status, socket_path);
 
     return NGX_CONF_OK;
 }
@@ -294,7 +308,7 @@ ngx_ipguard_auth_hook (ngx_http_request_t * r)
                     "ipguard check result: ret=%d uri=%V",
                     ret, &r->uri);
 
-    return (ret == IPGUARD_OK ? NGX_OK : NGX_HTTP_FORBIDDEN);
+    return (ret == IPGUARD_OK ? NGX_OK : srv->err_status);
 }
 
 /* Initialize after config file commands have been processed */
