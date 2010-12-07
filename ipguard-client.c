@@ -97,6 +97,7 @@ ipguard_disconnect(ipguard_cfg_t *cfg)
 		if (cfg->debug)
 			ipguard_log(cfg, "disconnected");
 	}
+
 	return 0;
 }
 
@@ -147,7 +148,7 @@ ipguard_send_query(ipguard_cfg_t *cfg, const char *req, char *reply, int reply_l
 	if (NULL == cfg)
 		cfg = ipguard_get_common_cfg();
 
-	for (attempt = 0; attempt < 1; attempt++) {
+	for (attempt = 0; attempt < 2; attempt++) {
 
 		if (cfg->socket < 0) {
 			if (ipguard_connect(cfg) < 0) {
@@ -160,12 +161,12 @@ ipguard_send_query(ipguard_cfg_t *cfg, const char *req, char *reply, int reply_l
 
 		i = 0;
 		n = 1;
-		while (i < len && n > 0) {
+		while (i < len && (n > 0 || (n < 0 && errno == EINTR))) {
 			n = send(cfg->socket, req + i, len - i, MSG_NOSIGNAL);
 			if (n > 0)
 				i += n;
 			if (cfg->debug)
-				ipguard_log(cfg, "sent %d bytes out of %d", n, len);
+				ipguard_log(cfg, "sent %d bytes out of %d, errno=%d", n, len, errno);
 		}
 
 		if (i == len)
@@ -188,7 +189,7 @@ ipguard_send_query(ipguard_cfg_t *cfg, const char *req, char *reply, int reply_l
 
 	i = 0;
 	n = 1;
-	while (i < reply_len - 1 && n > 0) {
+	while (i < reply_len - 1 && (n > 0 || (n < 0 && errno == EINTR))) {
 		n = recv(cfg->socket, reply + i, reply_len - i - 1, MSG_NOSIGNAL);
 		if (n > 0) {
 			for (k = i; k < i + n; k++) {
@@ -202,7 +203,7 @@ ipguard_send_query(ipguard_cfg_t *cfg, const char *req, char *reply, int reply_l
 			}
 		}
 		if (cfg->debug)
-			ipguard_log(cfg, "received %d bytes of response", n);
+			ipguard_log(cfg, "received %d bytes of response, errno=%d", n, errno);
 	}
 
 	reply[i] = '\0';
