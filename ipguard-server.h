@@ -22,7 +22,8 @@
 /* MAIN DECLARATIONS                                  */
 /* ================================================== */
 
-#define CHECK_INTERVAL 5	/* seconds between checks */
+#define CHECK_INTERVAL 10	/* seconds between data checks */
+#define CLIENT_TIMEOUT 10   /* disconnect clients after timeout */
 
 #define LIST_DAT 1
 #define LIST_PG1 2

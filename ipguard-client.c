@@ -178,7 +178,6 @@ ipguard_send_query(ipguard_cfg_t *cfg, const char *req, char *reply, int reply_l
 				ipguard_log(cfg, "cannot send query (%s)",
 						strerror_r(errno, erbuf, sizeof(erbuf)));
 			}
-			ipguard_disconnect(cfg);
 			return -1;
 		}
 
@@ -210,10 +209,6 @@ ipguard_send_query(ipguard_cfg_t *cfg, const char *req, char *reply, int reply_l
 	reply[i] = '\0';
 	if (cfg->debug)
 		ipguard_log(cfg, "validation response: \"%s\"", reply);
-
-#if defined(IPGUARD_NO_KEEPALIVE)
-	ipguard_disconnect(cfg);
-#endif
 
 	return 0;
 }
@@ -254,15 +249,15 @@ ipguard_check_ipaddr(ipguard_cfg_t *cfg, const char *ipaddr, char *answer, int a
 
 	ipguard_mutex_lock(cfg);
 	ret = ipguard_send_query(cfg, req, reply, sizeof(reply) - 1);
+	if (ret < 0 || !IPGUARD_KEEPALIVE)
+	    ipguard_disconnect();
 	ipguard_mutex_unlock(cfg);
 
 	if (ret < 0) {
 		ret = cfg->restrictive ? 1 : 0;
 		strcpy(reply, "FAIL");
-	} else if (0 == strcmp(reply, "OK")) {
-		ret = 0;
 	} else {
-		ret = 1;
+	    ret = (0 == strcmp(reply, "OK") ? 0 : 1);
 	}
 
 	if (cfg->debug) {
