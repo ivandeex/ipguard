@@ -55,6 +55,7 @@ typedef struct ipguard_cfg {
 	int  restrictive;
 	char socket_path[256];
 	int  socket;
+	int  timeout;
 #if IPGUARD_PTHREADS
 	pthread_mutex_t mutex;
 #endif /* IPGUARD_PTHREADS */
@@ -74,6 +75,7 @@ MODULE_INTERNAL int ipguard_check_sockaddr (ipguard_cfg_t *cfg, void *sockaddr_p
 #endif
 MODULE_INTERNAL int ipguard_set_debug (ipguard_cfg_t *cfg, int debug);
 MODULE_INTERNAL int ipguard_set_restrictive (ipguard_cfg_t *cfg, int restrictive);
+MODULE_INTERNAL int ipguard_set_timeout (ipguard_cfg_t *cfg, int timeout);
 MODULE_INTERNAL int ipguard_set_enable (ipguard_cfg_t *cfg, int enable);
 MODULE_INTERNAL int ipguard_set_socket_path (ipguard_cfg_t *cfg, const char *socket_path);
 

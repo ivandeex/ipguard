@@ -88,6 +88,7 @@ typedef struct
 	ngx_flag_t restrictive;
 	ngx_flag_t debug;
 	ngx_str_t  socket_path;
+	ngx_int_t  timeout;
 	ipguard_cfg_t *cfg;
 } ngx_ipguard_srv_t;
 
@@ -116,8 +117,18 @@ ngx_ipguard_post_ipguard (ngx_conf_t *cf, void *data, void *conf)
     return NGX_CONF_OK;
 }
 
+static char *
+ngx_ipguard_post_timeout (ngx_conf_t *cf, void *data, void *conf)
+{
+    ngx_int_t *np = conf;
+    if (*np < 0 || *np > 60)
+        return "ipguard: timeout should be between 0 and 60 seconds";
+    return NGX_CONF_OK;
+}
+
 static ngx_conf_post_t ngx_ipguard_conf_debug = { ngx_ipguard_post_debug };
 static ngx_conf_post_t ngx_ipguard_conf_ipguard = { ngx_ipguard_post_ipguard };
+static ngx_conf_post_t ngx_ipguard_conf_timeout = { ngx_ipguard_post_timeout };
 
 static const ngx_command_t
 ngx_ipguard_commands[] = {
@@ -147,6 +158,14 @@ ngx_ipguard_commands[] = {
       &ngx_ipguard_conf_debug },
 
     /* ... */
+    { ngx_string("ipguard_timeout"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_SRV_CONF_OFFSET,
+      offsetof(ngx_ipguard_srv_t, timeout),
+      &ngx_ipguard_conf_timeout },
+
+    /* ... */
     { ngx_string("ipguard"),
       NGX_HTTP_LOC_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_MAIN_CONF|NGX_CONF_FLAG,
       ngx_conf_set_flag_slot,
@@ -166,6 +185,7 @@ ngx_ipguard_srv_create (ngx_conf_t *cf)
     srv->enable = NGX_CONF_UNSET;
     srv->restrictive = NGX_CONF_UNSET;
     srv->debug = NGX_CONF_UNSET;
+    srv->timeout = NGX_CONF_UNSET;
     return (void *) srv;
 }
 
@@ -180,6 +200,7 @@ ngx_ipguard_srv_merge (ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_value(srv->enable, prv->enable, IPGUARD_DEF_ENABLE);
     ngx_conf_merge_value(srv->restrictive, prv->restrictive, IPGUARD_DEF_RESTRICTIVE);
     ngx_conf_merge_value(srv->debug, prv->debug, IPGUARD_DEF_DEBUG);
+    ngx_conf_merge_value(srv->timeout, prv->timeout, IPGUARD_SERVER_TIMEOUT);
     ngx_conf_merge_str_value(srv->socket_path, prv->socket_path, IPGUARD_DEF_SOCKET_PATH);
 
     srv->cfg = ngx_pcalloc(cf->pool, sizeof(ipguard_cfg_t));
@@ -197,12 +218,13 @@ ngx_ipguard_srv_merge (ngx_conf_t *cf, void *parent, void *child)
     ipguard_set_restrictive(srv->cfg, srv->restrictive);
     ipguard_set_socket_path(srv->cfg, socket_path);
     ipguard_set_enable(srv->cfg, srv->enable);
+    ipguard_set_timeout(srv->cfg, srv->timeout);
     ipguard_unlock();
 
     ipguard_ngx_log(cf->log, NGX_LOG_DEBUG,
-                    "init ipguard: server=%V enable=%d restrict=%d debug=%d socket=%s",
-                    &core_scf->server_name, srv->enable, srv->restrictive,
-                    srv->debug, socket_path);
+        "ipguard(%V): enable=%d restrict=%d debug=%d timeout=%d socket=%s",
+        &core_scf->server_name, srv->enable, srv->restrictive,
+        srv->debug, srv->timeout, socket_path);
 
     return NGX_CONF_OK;
 }

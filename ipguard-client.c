@@ -42,7 +42,7 @@ static ipguard_cfg_t *
 ipguard_get_common_cfg(void)
 {
 	ipguard_cfg_t *cfg = &ipguard_common_cfg;
-	if ('\0' == *cfg->socket_path)
+	if (! *cfg->socket_path)
 		ipguard_init(cfg);
 	return cfg;
 }
@@ -163,7 +163,7 @@ ipguard_send_query(ipguard_cfg_t *cfg, const char *req, char *reply, int reply_l
 			attempt++;
 		}
 
-        tv0.tv_sec = IPGUARD_SERVER_TIMEOUT;
+        tv0.tv_sec = cfg->timeout;
         tv0.tv_usec = 0;
 		i = 0;
 		n = 1;
@@ -191,7 +191,7 @@ ipguard_send_query(ipguard_cfg_t *cfg, const char *req, char *reply, int reply_l
                     ipguard_log(cfg, "ipguard send timeout");
                 break;
             }
-            tv0.tv_sec = IPGUARD_SERVER_TIMEOUT;    /* reload timeout */
+            tv0.tv_sec = cfg->timeout;    /* reload timeout */
             tv0.tv_usec = 0;
 
 			n = send(cfg->socket, req + i, len - i, MSG_NOSIGNAL);
@@ -217,7 +217,7 @@ ipguard_send_query(ipguard_cfg_t *cfg, const char *req, char *reply, int reply_l
 	if (cfg->debug)
 		ipguard_log(cfg, "request sent");
 
-    tv0.tv_sec = IPGUARD_SERVER_TIMEOUT;
+    tv0.tv_sec = cfg->timeout;
     tv0.tv_usec = 0;
 	i = 0;
 	n = 1;
@@ -245,7 +245,7 @@ ipguard_send_query(ipguard_cfg_t *cfg, const char *req, char *reply, int reply_l
                 ipguard_log(cfg, "ipguard recv timeout");
             return -1;
         }
-        tv0.tv_sec = IPGUARD_SERVER_TIMEOUT;    /* reload timeout */
+        tv0.tv_sec = cfg->timeout;    /* reload timeout */
         tv0.tv_usec = 0;
 
 		n = recv(cfg->socket, reply + i, reply_len - i - 1, MSG_NOSIGNAL);
@@ -405,6 +405,20 @@ ipguard_set_restrictive(ipguard_cfg_t *cfg, int new_restrictive)
 
 
 MODULE_INTERNAL int
+ipguard_set_timeout(ipguard_cfg_t *cfg, int new_timeout)
+{
+	int old_timeout;
+	if (NULL == cfg)
+		cfg = ipguard_get_common_cfg();
+
+	old_timeout = cfg->timeout;
+	if (new_timeout > 0)
+		cfg->timeout = new_timeout;
+	return old_timeout;
+}
+
+
+MODULE_INTERNAL int
 ipguard_set_enable(ipguard_cfg_t *cfg, int new_enable)
 {
 	int old_enable;
@@ -453,6 +467,7 @@ ipguard_init(ipguard_cfg_t *cfg)
 	cfg->debug = IPGUARD_DEF_DEBUG;
 	cfg->restrictive = IPGUARD_DEF_RESTRICTIVE;
 	cfg->socket = -1;
+	cfg->timeout = IPGUARD_SERVER_TIMEOUT;
 	strcpy(cfg->socket_path, IPGUARD_DEF_SOCKET_PATH);
 
 #if IPGUARD_PTHREADS
