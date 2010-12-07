@@ -655,6 +655,9 @@ handle_request(int cli_sock, char *buf, int buf_len, int *off_ptr)
 	char reply[80];
 	int ret = 0;
 	int off = *off_ptr;
+    fd_set fds;
+    struct timeval tv;
+    int sel;
 
 	k = off;
 	for (i = 0; i < k; i++) {
@@ -665,6 +668,23 @@ handle_request(int cli_sock, char *buf, int buf_len, int *off_ptr)
 	if (i == k) {
 		n = 1;
 		while (k < buf_len - 1 && n > 0) {
+            FD_ZERO(&fds);
+            FD_SET(cli_sock, &fds);
+
+            tv.tv_sec = CLIENT_TIMEOUT;
+            tv.tv_usec = 0;
+
+            sel = select(cli_sock + 1, &fds, NULL, NULL, &tv);
+            if (sel == -1) {
+                log_action("recv from %d select error %d", cli_sock, errno);
+                return -1;
+            }
+            if (!sel) {
+                if (verbose)
+                    log_action("recv socket %d timeout", cli_sock);
+                return -1;
+            }
+
 			n = recv(cli_sock, buf + k, buf_len - k - 1, MSG_NOSIGNAL);
 			if (n < 0)
 				ret = -1;
@@ -679,7 +699,8 @@ handle_request(int cli_sock, char *buf, int buf_len, int *off_ptr)
 			}
 		}
 		if (verbose)
-			log_action("received %d bytes (%d to handle)", k - off, i - off);
+			log_action("received %d bytes (%d to handle) from %d",
+			            k - off, i - off, cli_sock);
 	}
 
 	if (i == off)
@@ -688,9 +709,11 @@ handle_request(int cli_sock, char *buf, int buf_len, int *off_ptr)
 	buf[i] = '\0';
 	if (verbose) {
 		if (i < off)
-			log_action("picked %d bytes out of %d (%s)", i, off, buf);
+			log_action("picked %d bytes out of %d (%s) from %d",
+			            i, off, buf, cli_sock);
 		else
-			log_action("pulled %d bytes starting at %d (%s)", i - off, off, buf);
+			log_action("pulled %d bytes starting at %d (%s) from %d",
+			            i - off, off, buf, cli_sock);
 	}
 
 	blocking_ipaddr_blocked(buf, reply, sizeof(reply) - 1);
@@ -702,6 +725,23 @@ handle_request(int cli_sock, char *buf, int buf_len, int *off_ptr)
 	j = 0;
 	n = 1;
 	while (j < len && n > 0) {
+        FD_ZERO(&fds);
+        FD_SET(cli_sock, &fds);
+
+        tv.tv_sec = CLIENT_TIMEOUT;
+        tv.tv_usec = 0;
+
+        sel = select(cli_sock + 1, NULL, &fds, NULL, &tv);
+        if (sel == -1) {
+            log_action("send to %d select error %d", cli_sock, errno);
+            return -1;
+        }
+        if (!sel) {
+            if (verbose)
+                log_action("send socket %d timeout", cli_sock);
+            return -1;
+        }
+
 		n = send(cli_sock, reply + j, len - j, MSG_NOSIGNAL);
 		if (n > 0)
 			j += n;
@@ -712,7 +752,7 @@ handle_request(int cli_sock, char *buf, int buf_len, int *off_ptr)
 
 	if (verbose) {
 		reply[len - 1] = '\0';
-		log_action("sent %d bytes of \"%s\"", len, reply);
+		log_action("sent %d bytes of \"%s\" to %d", len, reply, cli_sock);
 	}
 
 	i++;
@@ -721,7 +761,7 @@ handle_request(int cli_sock, char *buf, int buf_len, int *off_ptr)
 		memcpy(buf, buf + i, off);
 		buf[off] = '\0';
 		if (verbose)
-			log_action("buffer off=%d rest=\"%s\"", off, buf);
+			log_action("buffer off=%d rest=\"%s\" for %d", off, buf, cli_sock);
 	} else {
 		off = 0;
 	}
