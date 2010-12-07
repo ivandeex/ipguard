@@ -403,7 +403,7 @@ ipguard_set_restrictive(ipguard_cfg_t *cfg, int new_restrictive)
 	return old_restrictive;
 }
 
-
+#if !defined(IPGUARD_APACHE_MODULE)
 MODULE_INTERNAL int
 ipguard_set_timeout(ipguard_cfg_t *cfg, int new_timeout)
 {
@@ -416,7 +416,7 @@ ipguard_set_timeout(ipguard_cfg_t *cfg, int new_timeout)
 		cfg->timeout = new_timeout;
 	return old_timeout;
 }
-
+#endif
 
 MODULE_INTERNAL int
 ipguard_set_enable(ipguard_cfg_t *cfg, int new_enable)

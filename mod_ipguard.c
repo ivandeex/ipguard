@@ -192,12 +192,12 @@ ipguard_check_access(request_rec *r)
 	if (d->check != IPGUARD_ON)
 		return OK;
 
-	c->cfg->apache_req = r;
+	c->cfg->req = r;
 	ipguard_lock();
 	ret = ipguard_check_ipaddr(c->cfg, r->connection->remote_ip,
 								reply, sizeof(reply));
 	ipguard_unlock();
-	c->cfg->apache_req = NULL;
+	c->cfg->req = NULL;
 	ret = (ret == IPGUARD_OK) ? OK : HTTP_FORBIDDEN;
 
 	if (c->debug == IPGUARD_ON || ret != OK) {
