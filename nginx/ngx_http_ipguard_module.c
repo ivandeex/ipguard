@@ -290,7 +290,7 @@ ngx_ipguard_auth_hook (ngx_http_request_t * r)
 
     /* pass if not enabled */
     if (!loc || !loc->check || !srv || !srv->enable)
-        return NGX_DECLINED;
+        return NGX_OK /* DECLINED */;
 
     /* pass if request is for favicon or robots */
     if (ngx_strcasecmp_c (r->uri, "/favicon.ico")

@@ -5,7 +5,7 @@
 %global apxs %{_sbindir}/apxs
 
 Name:           ipguard
-Version:        0.5
+Version:        0.7
 Release:        %{rdist}
 Summary:        Blocks connections from/to hosts listed by PeerGuardian etc.
 
@@ -85,6 +85,9 @@ fi
 %config(noreplace) %{_sysconfdir}/httpd/conf.d/ipguard.conf
 
 %changelog
+* Tue May 15 2012  vitki <vitki@vitki.net> 0.9rc2-vitki.06
+- fix 64-bit nginx build
+
 * Tue Dec  7 2010  vitki <vitki@vitki.net> 0.9rc2-vitki.03
 - add nginx module
 - fix unstable connection
