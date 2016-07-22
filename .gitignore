@@ -1,0 +1,17 @@
+
+# /
+/config.h
+/config.status
+/config.log
+/stamp-h1
+/autom4te.cache
+/libtool
+/Makefile
+/.deps
+/.libs
+/*.slo
+/ipguardd
+/ipguard-test
+
+# /etc/
+/etc/Makefile
